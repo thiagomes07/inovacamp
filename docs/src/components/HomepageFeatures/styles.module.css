@@ -10,3 +10,18 @@
   width: 200px;
   object-fit: contain;
 }
+
+.centeredText {
+  text-align: center;
+  margin-top: 2rem; /* Espaçamento opcional para separar dos cards */
+  width: 100%;
+}
+
+.centeredText p {
+  font-size: 1.5rem;        /* texto maior */
+  font-weight: 100;         /* negrito para impacto */
+  letter-spacing: 0.11em;    /* espaço maior entre letras */
+  margin-top: 2.1rem;         /* espaçamento em cima */
+  color: #222222;           /* cor mais forte e destacada */
+  text-transform: uppercase; /* letras maiúsculas para destaque */
+}
