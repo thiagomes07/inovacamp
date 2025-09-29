@@ -12,9 +12,7 @@ const FeatureList = [
     imgSrc: credit,
     description: (
       <>
-        Nossa solução P2P conecta diretamente investidores e tomadores de
-        crédito, eliminando intermediários e democratizando o acesso ao
-        financiamento para todos os perfis de usuários.
+        Nossa plataforma P2P conecta um ecossistema global de investidores a tomadores de crédito, usando ativos do mundo real como garantia para oferecer as melhores condições.
       </>
     ),
   },
@@ -23,10 +21,7 @@ const FeatureList = [
     imgSrc: blockchain_and_ai,
     description: (
       <>
-        Utilizamos <strong>Blockchain</strong> para transparência e
-        imutabilidade das transações, combinado com{" "}
-        <strong>Inteligência Artificial</strong> para avaliação de risco e
-        prevenção a fraudes em tempo real.
+        Usamos <strong>Blockchain</strong> para tokenizar ativos e garantir transparência, enquanto nossa <strong>Inteligência Artificial</strong> analisa o valor e o risco desses ativos, tornando o crédito mais seguro e acessível.
       </>
     ),
   },
@@ -35,9 +30,7 @@ const FeatureList = [
     imgSrc: qi_tech_at_the_top,
     description: (
       <>
-        Parceria com a <strong>QI Tech</strong>, a maior fintech da América
-        Latina, garantindo infraestrutura robusta, compliance regulatório e
-        escalabilidade para nossa solução inovadora.
+        Uma solução projetada para levar a <strong>QI Tech</strong> de único unicórnio da América Latina em 2024 para a <strong>maior e mais inovadora fintech do continente</strong>.
       </>
     ),
   },
