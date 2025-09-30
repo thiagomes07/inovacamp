@@ -8,41 +8,38 @@ import credit from "@site/static/img/credit.png";
 
 const FeatureList = [
   {
-    title: "Democratização do Acesso ao Crédito",
+    title: "Crédito Inteligente e Acessível",
     imgSrc: credit,
     description: (
       <>
-        Nossa plataforma P2P conecta um ecossistema global de investidores a tomadores de crédito, usando ativos do mundo real como garantia para oferecer as melhores condições.
+        Conectamos tomadores a um ecossistema global de investidores. Nosso <strong>score de crédito gamificado</strong> usa dados do dia a dia (Uber, iFood, etc.) para revelar o verdadeiro potencial de cada um, garantindo crédito justo e com liquidez instantânea via PIX.
       </>
     ),
   },
   {
-    title: "Tecnologias Inteligentes",
+    title: "Confiança via Blockchain e IA",
     imgSrc: blockchain_and_ai,
     description: (
       <>
-        Usamos <strong>Blockchain</strong> para tokenizar ativos e garantir transparência, enquanto nossa <strong>Inteligência Artificial</strong> analisa o valor e o risco desses ativos, tornando o crédito mais seguro e acessível.
+        Usamos <strong>Blockchain</strong> para garantir transparência total em cada transação e permitir garantias tokenizadas. Nossa <strong>Inteligência Artificial</strong> valida dados e analisa riscos de forma justa, construindo um ecossistema de crédito mais seguro e eficiente para todos.
       </>
     ),
   },
   {
-    title: "QI Tech no Topo",
+    title: "QI Tech: Do Unicórnio ao Domínio",
     imgSrc: qi_tech_at_the_top,
     description: (
       <>
-        Uma solução projetada para levar a <strong>QI Tech</strong> de único unicórnio da América Latina em 2024 para a <strong>maior e mais inovadora fintech do continente</strong>.
+        Uma solução projetada para levar a <strong>QI Tech</strong> de unicórnio a líder absoluta. Ao conquistar o varejo e democratizar o crédito, construiremos a <strong>maior e mais inovadora fintech da América Latina</strong>.
       </>
     ),
   },
 ];
 
-// --- PASSO 2: ATUALIZE O COMPONENTE FEATURE ---
-// Ele agora receberá 'imgSrc' em vez de 'Svg' e usará uma tag <img>.
 function Feature({ imgSrc, title, description }) {
   return (
     <div className={clsx("col col--4")}>
       <div className="text--center">
-        {/* Usamos a tag <img> com o caminho da imagem */}
         <img src={imgSrc} className={styles.featureSvg} alt={title} />
       </div>
       <div className="text--center padding-horiz--md">
@@ -53,7 +50,6 @@ function Feature({ imgSrc, title, description }) {
   );
 }
 
-// O componente principal não precisa de nenhuma alteração.
 export default function HomepageFeatures() {
   return (
     <section className={styles.features}>
@@ -63,7 +59,6 @@ export default function HomepageFeatures() {
             <Feature key={idx} {...props} />
           ))}
         </div>
-        {/* Texto centralizado EMBAIXO dos cards */}
         <div className={styles.centeredText}>
           <p>Serviços bancários são necessários, bancos não.</p>
         </div>

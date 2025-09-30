@@ -21,7 +21,10 @@
   font-size: 1.5rem;        /* texto maior */
   font-weight: 100;         /* negrito para impacto */
   letter-spacing: 0.11em;    /* espaço maior entre letras */
-  margin-top: 2.1rem;         /* espaçamento em cima */
-  color: #222222;           /* cor mais forte e destacada */
+  margin-top: 2.2rem;         /* espaçamento em cima */
   text-transform: uppercase; /* letras maiúsculas para destaque */
+}
+
+.centeredText p {
+  color: var(--ifm-font-color-base);
 }
