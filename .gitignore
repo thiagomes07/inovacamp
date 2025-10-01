@@ -1,0 +1,131 @@
+# -------------------- #
+# .NET Core / .NET 6+ / Visual Studio 2022 #
+# -------------------- #
+# temporário do visual studio
+.vs/
+.vs/*
+.vscode/
+
+# Arquivos binários e objetos compilados
+bin/
+obj/
+
+# Arquivos de usuário do Visual Studio
+*.user
+*.userosscache
+*.suo
+
+# Arquivos de configuração local do .NET
+*.csproj.user
+*.DotSettings.user
+
+# Logs e caches
+*.log
+*.tmp
+
+# Pacotes NuGet locais
+packages/
+*.nupkg
+
+# -------------------- #
+# React Native         #
+# -------------------- #
+# Node.js dependencies
+node_modules/
+
+# Cache do npm/yarn
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Metro bundler cache
+/.expo/
+/metro-cache/
+
+# Watchman cache
+.watchmanconfig
+
+# Android-specific files
+/android/app/build/
+/android/.gradle/
+/android/captures/
+/local.properties
+
+# iOS-specific files
+/ios/build/
+/ios/Pods/
+/ios/*.xcworkspace/xcuserdata/
+/ios/*.xcodeproj/xcuserdata/
+
+# -------------------- #
+# Docker               #
+# -------------------- #
+# Imagens e volumes do Docker
+.docker/
+docker-compose.override.yml
+
+# -------------------- #
+# Visual Studio Code   #
+# -------------------- #
+# Configurações locais do VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Histórico de estado do editor
+*.code-workspace
+
+# -------------------- #
+# macOS                #
+# -------------------- #
+# Arquivos específicos do macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# -------------------- #
+# Linux                #
+# -------------------- #
+# Arquivos temporários
+*~
+
+# -------------------- #
+# Windows              #
+# -------------------- #
+# Arquivos específicos do Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# -------------------- #
+# Outros               #
+# -------------------- #
+# Arquivos de backup
+*~
+*.bak
+*.tmp
+
+# Logs e dumps
+*.log
+*.dump
+
+# Ambientes virtuais Python (caso use algum)
+venv/
+ENV/
+env/
+.venv/
+
+# Arquivos sensíveis (opcionalmente, adicione aqui arquivos como .env)
+.env
+.env.local
+
+# Arquivos Terraform
+terraform.tfvars
+*.tfstate
+*.tfstate.backup
+
+# Docusaurus
+.docusaurus
+/docs/build

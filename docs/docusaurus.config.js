@@ -90,7 +90,7 @@ const config = {
           Feito por <a href="https://www.linkedin.com/in/henrique-botti-6272571a0/" target="_blank" rel="noopener noreferrer">Henrique Botti</a>, 
           <a href="https://www.linkedin.com/in/gabriel-martins-alves/" target="_blank" rel="noopener noreferrer">Gabriel Martins</a> e 
           <a href="https://www.linkedin.com/in/thiagogomesalmeida/" target="_blank" rel="noopener noreferrer">Thiago Gomes</a>. 
-          Para a o Hackathon: <a href="https://www.inovacamp-qitech.com.br/" target="_blank" rel="noopener noreferrer">InovaCamp Qitech</a>. 
+          Para a o Hackathon: <a href="https://www.inovacamp-qitech.com.br/" target="_blank" rel="noopener noreferrer">InovaCamp QI Tech</a>. 
           © ${new Date().getFullYear()} <nome_da_solucao>, Inc. Built with Docusaurus.
         `,
       },
