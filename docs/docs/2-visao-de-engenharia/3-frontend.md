@@ -1,11 +1,8 @@
-
 # Frontend
 
 **Demo Live:** [http://swapin-inovacamp.s3-website-us-east-1.amazonaws.com/](http://swapin-inovacamp.s3-website-us-east-1.amazonaws.com/)
 
 *Observação: A demonstração é um protótipo web publicado. Para uma experiência ideal, recomenda-se navegar utilizando as ferramentas de desenvolvedor do seu navegador para simular um dispositivo móvel.*
-
-
 
 ## **Funcionalidades e Fluxos da Plataforma**
 
