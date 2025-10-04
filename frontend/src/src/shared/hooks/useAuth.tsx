@@ -1,17 +1,25 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from "react";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 interface User {
   id: string;
   name: string;
   email: string;
   phone: string;
-  profileType: 'borrower' | 'lender';
-  userType?: 'individual' | 'company' | 'employee';
+  profileType: "borrower" | "lender";
+  userType?: "individual" | "company" | "employee";
   avatar?: string;
   isVerified: boolean;
-  kycStatus: 'pending' | 'approved' | 'rejected';
+  kycStatus: "pending" | "approved" | "rejected";
   score: number;
-  scoreLevel: 'Bronze' | 'Silver' | 'Gold' | 'Platinum';
+  scoreLevel: "Bronze" | "Silver" | "Gold" | "Platinum";
 }
 
 interface AuthContextType {
@@ -20,8 +28,6 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (userData: RegisterData) => Promise<void>;
   logout: () => void;
-  updateUser: (userData: Partial<User>) => void;
-  updateUserScore: (newScore: number) => void;
 }
 
 interface RegisterData {
@@ -29,8 +35,8 @@ interface RegisterData {
   email: string;
   password: string;
   phone: string;
-  profileType: 'borrower' | 'lender';
-  userType?: 'individual' | 'company' | 'employee';
+  profileType: "borrower" | "lender";
+  userType?: "individual" | "company" | "employee";
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -38,18 +44,20 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     // Check for stored user session
-    const storedUser = localStorage.getItem('swapin_user');
+    const storedUser = localStorage.getItem("swapin_user");
     if (storedUser) {
       setUser(JSON.parse(storedUser));
     }
@@ -58,92 +66,86 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);
-    
-    // TODO: POST /api/auth/login
-    // Mock login
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const mockUser: User = {
-      id: '1',
-      name: 'João Silva',
-      email,
-      phone: '(11) 99999-9999',
-      profileType: email.includes('lender') ? 'lender' : 'borrower',
-      userType: 'individual',
-      isVerified: true,
-      kycStatus: 'approved',
-      score: 750,
-      scoreLevel: 'Gold'
-    };
-    
-    setUser(mockUser);
-    localStorage.setItem('swapin_user', JSON.stringify(mockUser));
-    setIsLoading(false);
+    console.log("[useAuth] Iniciando login...");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error("[useAuth] Erro no login:", error);
+        throw new Error(error.detail || "Erro ao fazer login");
+      }
+
+      const data = await response.json();
+      console.log("[useAuth] Login bem-sucedido:", data);
+
+      // Armazena todos os dados no localStorage
+      localStorage.setItem("user", JSON.stringify(data.user));
+      localStorage.setItem("tokens", JSON.stringify(data.tokens));
+
+      setUser(data.user);
+    } catch (error) {
+      console.error("[useAuth] Erro ao fazer login:", error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const register = async (userData: RegisterData) => {
+  const register = async (userData: any) => {
     setIsLoading(true);
-    
-    // TODO: POST /api/auth/register
-    // Mock registration
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    const newUser: User = {
-      id: Math.random().toString(36).substr(2, 9),
-      ...userData,
-      isVerified: false,
-      kycStatus: 'pending',
-      score: 400,
-      scoreLevel: 'Bronze'
-    };
-    
-    setUser(newUser);
-    localStorage.setItem('swapin_user', JSON.stringify(newUser));
-    setIsLoading(false);
+    console.log("[useAuth] Iniciando registro...");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(userData),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error("[useAuth] Erro no registro:", error);
+        throw new Error(error.detail || "Erro ao registrar usuário");
+      }
+
+      const data = await response.json();
+      console.log("[useAuth] Registro bem-sucedido:", data);
+
+      // Armazena todos os dados no localStorage
+      localStorage.setItem("user", JSON.stringify(data.user));
+      localStorage.setItem("tokens", JSON.stringify(data.tokens));
+
+      setUser(data.user);
+    } catch (error) {
+      console.error("[useAuth] Erro ao registrar:", error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const logout = () => {
+    console.log("[useAuth] Realizando logout...");
     setUser(null);
-    localStorage.removeItem('swapin_user');
-  };
-
-  const updateUser = (userData: Partial<User>) => {
-    if (user) {
-      const updatedUser = { ...user, ...userData };
-      setUser(updatedUser);
-      localStorage.setItem('swapin_user', JSON.stringify(updatedUser));
-    }
-  };
-
-  const updateUserScore = (newScore: number) => {
-    if (user) {
-      // Calculate score level based on new score
-      let scoreLevel: 'Bronze' | 'Silver' | 'Gold' | 'Platinum';
-      if (newScore >= 900) scoreLevel = 'Platinum';
-      else if (newScore >= 750) scoreLevel = 'Gold';
-      else if (newScore >= 600) scoreLevel = 'Silver';
-      else scoreLevel = 'Bronze';
-
-      const updatedUser = { 
-        ...user, 
-        score: newScore,
-        scoreLevel 
-      };
-      setUser(updatedUser);
-      localStorage.setItem('swapin_user', JSON.stringify(updatedUser));
-    }
+    localStorage.removeItem("swapin_user");
   };
 
   return (
-    <AuthContext.Provider value={{
-      user,
-      isLoading,
-      login,
-      register,
-      logout,
-      updateUser,
-      updateUserScore
-    }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        isLoading,
+        login,
+        register,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

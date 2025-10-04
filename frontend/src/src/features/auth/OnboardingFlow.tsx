@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft } from 'lucide-react';
-import { ProfileSelection } from './onboarding/ProfileSelection';
-import { UserTypeSelection } from './onboarding/UserTypeSelection';
-import { BasicInfo } from './onboarding/BasicInfo';
-import { PhoneVerification } from './onboarding/PhoneVerification';
-import { KYCUpload } from './onboarding/KYCUpload';
-import { BiometricVerification } from './onboarding/BiometricVerification';
-import { OnboardingSuccess } from './onboarding/OnboardingSuccess';
+import React, { useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import { ArrowLeft } from "lucide-react";
+import { ProfileSelection } from "./onboarding/ProfileSelection";
+import { UserTypeSelection } from "./onboarding/UserTypeSelection";
+import { BasicInfo } from "./onboarding/BasicInfo";
+import { PhoneVerification } from "./onboarding/PhoneVerification";
+import { KYCUpload } from "./onboarding/KYCUpload";
+import { BiometricVerification } from "./onboarding/BiometricVerification";
+import { OnboardingSuccess } from "./onboarding/OnboardingSuccess";
+import { useAuth } from "../../shared/hooks/useAuth";
 
 interface OnboardingFlowProps {
   onBack: () => void;
@@ -15,56 +16,55 @@ interface OnboardingFlowProps {
 }
 
 export interface OnboardingData {
-  profileType: 'borrower' | 'lender' | null;
-  userType: 'individual' | 'company' | 'employee' | null;
   name: string;
   email: string;
   password: string;
   phone: string;
-  verificationCode: string;
-  kycDocuments: {
-    frontDocument?: File;
-    backDocument?: File;
-  };
-  biometricData?: any;
+  cpf_cnpj?: string;
+  document_type?: string;
+  date_of_birth?: string;
 }
 
 const STEPS = [
-  'profile',
-  'userType',
-  'basicInfo',
-  'phoneVerification',
-  'kycUpload',
-  'biometric',
-  'success'
+  "profile",
+  "userType",
+  "basicInfo",
+  "phoneVerification",
+  "kycUpload",
+  "biometric",
+  "success",
 ] as const;
 
-export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onBack, onComplete }) => {
+export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
+  onBack,
+  onComplete,
+}) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [data, setData] = useState<OnboardingData>({
-    profileType: null,
-    userType: null,
-    name: '',
-    email: '',
-    password: '',
-    phone: '',
-    verificationCode: '',
-    kycDocuments: {}
+    name: "",
+    email: "",
+    password: "",
+    phone: "",
+    cpf_cnpj: "",
+    document_type: "CPF",
+    date_of_birth: "",
   });
 
+  const { register } = useAuth();
+
   const updateData = (newData: Partial<OnboardingData>) => {
-    setData(prev => ({ ...prev, ...newData }));
+    setData((prev) => ({ ...prev, ...newData }));
   };
 
   const nextStep = () => {
     if (currentStep < STEPS.length - 1) {
-      setCurrentStep(prev => prev + 1);
+      setCurrentStep((prev) => prev + 1);
     }
   };
 
   const prevStep = () => {
     if (currentStep > 0) {
-      setCurrentStep(prev => prev - 1);
+      setCurrentStep((prev) => prev - 1);
     }
   };
 
@@ -76,9 +76,20 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onBack, onComple
     }
   };
 
+  const handleRegister = async (formData: any) => {
+    try {
+      console.log("[BasicInfo] Enviando dados de registro:", formData);
+      await register(formData);
+      nextStep();
+    } catch (error) {
+      console.error("[BasicInfo] Erro ao registrar usuário:", error);
+      alert("Erro ao registrar usuário. Verifique os dados e tente novamente.");
+    }
+  };
+
   const getStepComponent = () => {
     switch (STEPS[currentStep]) {
-      case 'profile':
+      case "profile":
         return (
           <ProfileSelection
             selectedProfile={data.profileType}
@@ -88,8 +99,8 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onBack, onComple
             }}
           />
         );
-      
-      case 'userType':
+
+      case "userType":
         return (
           <UserTypeSelection
             profileType={data.profileType!}
@@ -99,22 +110,22 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onBack, onComple
               nextStep();
             }}
             onSkip={() => {
-              updateData({ userType: 'individual' });
+              updateData({ userType: "individual" });
               nextStep();
             }}
           />
         );
-      
-      case 'basicInfo':
+
+      case "basicInfo":
         return (
           <BasicInfo
-            data={data}
-            onUpdate={updateData}
-            onNext={nextStep}
+            data={data} // Passa os dados do formulário
+            onUpdate={updateData} // Passa a função para atualizar os dados
+            onNext={nextStep} // Passa a função para avançar para o próximo passo
           />
         );
-      
-      case 'phoneVerification':
+
+      case "phoneVerification":
         return (
           <PhoneVerification
             phone={data.phone}
@@ -123,8 +134,8 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onBack, onComple
             onNext={nextStep}
           />
         );
-      
-      case 'kycUpload':
+
+      case "kycUpload":
         return (
           <KYCUpload
             documents={data.kycDocuments}
@@ -132,8 +143,8 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onBack, onComple
             onNext={nextStep}
           />
         );
-      
-      case 'biometric':
+
+      case "biometric":
         return (
           <BiometricVerification
             onComplete={(biometricData) => {
@@ -141,27 +152,27 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onBack, onComple
               nextStep();
             }}
             onSkip={() => {
-              updateData({ biometricData: { skipped: true, timestamp: new Date().toISOString() } });
+              updateData({
+                biometricData: {
+                  skipped: true,
+                  timestamp: new Date().toISOString(),
+                },
+              });
               nextStep();
             }}
           />
         );
-      
-      case 'success':
-        return (
-          <OnboardingSuccess
-            userData={data}
-            onComplete={onComplete}
-          />
-        );
-      
+
+      case "success":
+        return <OnboardingSuccess userData={data} onComplete={onComplete} />;
+
       default:
         return null;
     }
   };
 
-  const shouldShowUserType = data.profileType === 'borrower';
-  const progress = shouldShowUserType 
+  const shouldShowUserType = data.profileType === "borrower";
+  const progress = shouldShowUserType
     ? ((currentStep + 1) / STEPS.length) * 100
     : (currentStep / (STEPS.length - 1)) * 100;
 
@@ -175,7 +186,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onBack, onComple
         >
           <ArrowLeft className="w-6 h-6" />
         </button>
-        
+
         <div className="flex-1 mx-4">
           <div className="bg-gray-700 rounded-full h-2">
             <motion.div
@@ -186,9 +197,10 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onBack, onComple
             />
           </div>
         </div>
-        
+
         <span className="text-sm text-gray-400">
-          {currentStep + 1}/{shouldShowUserType ? STEPS.length : STEPS.length - 1}
+          {currentStep + 1}/
+          {shouldShowUserType ? STEPS.length : STEPS.length - 1}
         </span>
       </div>
 

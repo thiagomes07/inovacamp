@@ -2,6 +2,8 @@ from sqlalchemy import Column, String, Integer, Boolean, Date, DateTime, JSON, E
 from sqlalchemy.sql import func
 from app.database import Base
 import enum
+import uuid
+from datetime import datetime
 
 
 class DocumentType(str, enum.Enum):
@@ -9,23 +11,55 @@ class DocumentType(str, enum.Enum):
     CNPJ = "cnpj"
 
 
+class ProfileType(str, enum.Enum):
+    BORROWER = "BORROWER"
+    INVESTOR = "INVESTOR"
+
+
+class UserType(str, enum.Enum):
+    INDIVIDUAL = "individual"
+    COMPANY = "company"
+
+
 class User(Base):
     __tablename__ = "users"
-    
-    user_id = Column(String(36), primary_key=True, index=True)
-    email = Column(String(255), unique=True, nullable=False, index=True)
+
+    user_id = Column(String(36), primary_key=True, default=str(uuid.uuid4()))
+    email = Column(String(255), nullable=False, unique=True)
     password_hash = Column(String(255), nullable=False)
     full_name = Column(String(255), nullable=False)
     phone = Column(String(20))
-    cpf_cnpj = Column(String(14), unique=True, nullable=False, index=True)
+    cpf_cnpj = Column(String(14), nullable=False, unique=True)
     document_type = Column(SQLEnum(DocumentType), nullable=False)
     date_of_birth = Column(Date)
     credit_score = Column(Integer, default=0)
-    kyc_approved = Column(Boolean, default=False, index=True)
+    kyc_approved = Column(Boolean, default=False)
     document_links = Column(JSON)
     financial_docs = Column(JSON)
-    created_at = Column(DateTime, server_default=func.now())
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    profile_type = Column(SQLEnum(ProfileType), default=ProfileType.BORROWER)
+    user_type = Column(SQLEnum(UserType), default=UserType.INDIVIDUAL)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        """Converte o objeto User em um dicionário."""
+        return {
+            "user_id": self.user_id,
+            "email": self.email,
+            "full_name": self.full_name,
+            "phone": self.phone,
+            "cpf_cnpj": self.cpf_cnpj,
+            "document_type": self.document_type.value,
+            "date_of_birth": self.date_of_birth,
+            "credit_score": self.credit_score,
+            "kyc_approved": self.kyc_approved,
+            "document_links": self.document_links,
+            "financial_docs": self.financial_docs,
+            "profile_type": self.profile_type.value,
+            "user_type": self.user_type.value,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        }
 
 
 class Investor(Base):
