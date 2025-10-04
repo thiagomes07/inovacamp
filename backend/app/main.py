@@ -2,21 +2,21 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.core.config import settings
-from app.controllers import (
-    auth_controller,
-    credit_controller,
-    loan_controller,
-    investment_controller,
-    portfolio_controller,
-    pool_controller,
-    wallet_controller,
-    currency_controller,
-    pix_controller,
-    transaction_controller,
-    deposit_controller,
-    open_finance_controller,
-    kyc_controller
-)
+
+# Import modular routers
+from app.modules.auth import router as auth_router
+from app.modules.credit import router as credit_router
+from app.modules.loan import router as loan_router
+from app.modules.investment import router as investment_router
+from app.modules.portfolio import router as portfolio_router
+from app.modules.pool import router as pool_router
+from app.modules.wallet import router as wallet_router
+from app.modules.currency import router as currency_router
+from app.modules.pix import router as pix_router
+from app.modules.transaction import router as transaction_router
+from app.modules.deposit import router as deposit_router
+from app.modules.open_finance import router as open_finance_router
+from app.modules.kyc import router as kyc_router
 
 # Create FastAPI application
 app = FastAPI(
@@ -78,20 +78,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
-app.include_router(auth_controller.router, prefix=settings.API_V1_PREFIX)
-app.include_router(credit_controller.router, prefix=settings.API_V1_PREFIX)
-app.include_router(loan_controller.router, prefix=settings.API_V1_PREFIX)
-app.include_router(investment_controller.router, prefix=settings.API_V1_PREFIX)
-app.include_router(portfolio_controller.router, prefix=settings.API_V1_PREFIX)
-app.include_router(pool_controller.router, prefix=settings.API_V1_PREFIX)
-app.include_router(wallet_controller.router, prefix=settings.API_V1_PREFIX)
-app.include_router(currency_controller.router, prefix=settings.API_V1_PREFIX)
-app.include_router(pix_controller.router, prefix=settings.API_V1_PREFIX)
-app.include_router(transaction_controller.router, prefix=settings.API_V1_PREFIX)
-app.include_router(deposit_controller.router, prefix=settings.API_V1_PREFIX)
-app.include_router(open_finance_controller.router, prefix=settings.API_V1_PREFIX)
-app.include_router(kyc_controller.router, prefix=settings.API_V1_PREFIX)
+# Include routers - Modular Architecture
+app.include_router(auth_router, prefix=settings.API_V1_PREFIX)
+app.include_router(credit_router, prefix=settings.API_V1_PREFIX)
+app.include_router(loan_router, prefix=settings.API_V1_PREFIX)
+app.include_router(investment_router, prefix=settings.API_V1_PREFIX)
+app.include_router(portfolio_router, prefix=settings.API_V1_PREFIX)
+app.include_router(pool_router, prefix=settings.API_V1_PREFIX)
+app.include_router(wallet_router, prefix=settings.API_V1_PREFIX)
+app.include_router(currency_router, prefix=settings.API_V1_PREFIX)
+app.include_router(pix_router, prefix=settings.API_V1_PREFIX)
+app.include_router(transaction_router, prefix=settings.API_V1_PREFIX)
+app.include_router(deposit_router, prefix=settings.API_V1_PREFIX)
+app.include_router(open_finance_router, prefix=settings.API_V1_PREFIX)
+app.include_router(kyc_router, prefix=settings.API_V1_PREFIX)
 
 
 @app.get("/")
