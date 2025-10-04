@@ -16,6 +16,7 @@ class PIXService:
         # TODO: Integrar com API do banco
         # TODO: Validar chave PIX
         # TODO: Processar transação
+        print("pix enviado")
         return {"message": "PIX sent", "status": "pending"}
     
     def receive_pix(self, data: dict) -> dict:

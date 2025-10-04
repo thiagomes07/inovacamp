@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   QrCode, 
   Copy, 
@@ -9,13 +9,17 @@ import {
   Share,
   DollarSign,
   Clock,
-  Shield
+  Shield,
+  X,
+  AlertCircle
 } from 'lucide-react';
-import { Button } from '../../../../components/ui/button';
-import { Card } from '../../../../components/ui/card';
-import { Input } from '../../../../components/ui/input';
-import { MaskedInput } from '../../../shared/components/ui/MaskedInput';
-import { toast } from 'sonner@2.0.3';
+
+// Declare jsQR global type
+declare global {
+  interface Window {
+    jsQR: any;
+  }
+}
 
 type PixMethod = 'select' | 'qr-code' | 'copy-paste' | 'manual-key' | 'confirm-amount' | 'biometric' | 'processing' | 'receipt';
 
@@ -37,51 +41,199 @@ export const PixWithdraw: React.FC<PixWithdrawProps> = ({
     recipient: ''
   });
   const [isScanning, setIsScanning] = useState(false);
+  const [scannedCode, setScannedCode] = useState('');
+  const [cameraError, setCameraError] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [jsQRLoaded, setJsQRLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<boolean>(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanIntervalRef = useRef<number | null>(null);
 
-  const handleQRCodeScan = () => {
-    setIsScanning(true);
-    // Simulate QR code scanning
-    setTimeout(() => {
+  // Load jsQR library
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+    script.async = true;
+    script.onload = () => {
+      console.log('jsQR library loaded successfully');
+      setJsQRLoaded(true);
+    };
+    script.onerror = () => {
+      console.error('Failed to load jsQR library');
+      setCameraError('Erro ao carregar biblioteca de leitura de QR Code');
+    };
+    document.body.appendChild(script);
+
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+
+  // Cleanup camera on unmount or step change
+  useEffect(() => {
+    return () => {
+      stopCamera();
+    };
+  }, []);
+
+  const stopCamera = () => {
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setIsScanning(false);
+  };
+
+  const startCamera = async () => {
+    if (!jsQRLoaded) {
+      setCameraError('Aguarde o carregamento da biblioteca...');
+      return;
+    }
+    
+    setCameraError('');
+    setScannedCode('');
+    
+    try {
+      const constraints = {
+        video: { 
+          facingMode: 'environment',
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      };
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      
+      streamRef.current = stream;
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        
+        // Force video to play
+        videoRef.current.onloadedmetadata = async () => {
+          try {
+            await videoRef.current?.play();
+            console.log('Vídeo iniciado com sucesso');
+            setIsScanning(true);
+            
+            // Start scanning for QR codes after video starts
+            setTimeout(() => {
+              console.log('Iniciando varredura de QR Code...');
+              scanIntervalRef.current = window.setInterval(() => {
+                scanQRCode();
+              }, 300); // Scan every 300ms for better detection
+            }, 1000);
+          } catch (err) {
+            console.error('Erro ao reproduzir vídeo:', err);
+            setCameraError('Erro ao iniciar visualização da câmera');
+          }
+        };
+      }
+    } catch (error: any) {
+      console.error('Erro ao acessar câmera:', error);
+      let errorMessage = 'Não foi possível acessar a câmera.';
+      
+      if (error.name === 'NotAllowedError') {
+        errorMessage = 'Permissão de câmera negada. Permita o acesso nas configurações.';
+      } else if (error.name === 'NotFoundError') {
+        errorMessage = 'Nenhuma câmera encontrada no dispositivo.';
+      }
+      
+      setCameraError(errorMessage);
       setIsScanning(false);
-      setPixData(prev => ({
-        ...prev,
-        method: 'qr-code',
-        code: '00020126580014BR.GOV.BCB.PIX01364b4c2e8b-8e4d-4c8a-9f2e-3d1a2b3c4d5e6f5204000053039865802BR5925João Santos Silva63040B2D',
-        amount: '150.00',
-        recipient: 'João Santos Silva'
-      }));
-      setCurrentStep('confirm-amount');
-      toast.success('QR Code lido com sucesso!');
-    }, 2000);
+    }
+  };
+
+  const scanQRCode = () => {
+    if (!videoRef.current || !canvasRef.current || !window.jsQR) {
+      console.log('Waiting for jsQR to load or video ready...');
+      return;
+    }
+    
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    
+    if (!context || video.readyState !== video.HAVE_ENOUGH_DATA) {
+      return;
+    }
+    
+    // Set canvas size to match video
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    
+    // Draw current video frame to canvas
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    // Get image data from canvas
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    
+    // Scan for QR code
+    const code = window.jsQR(imageData.data, imageData.width, imageData.height, {
+      inversionAttempts: 'dontInvert',
+    });
+    
+    if (code && code.data) {
+      console.log('QR Code detected:', code.data);
+      handleQRCodeDetected(code.data);
+    }
+  };
+
+  const handleQRCodeDetected = (data: string) => {
+    stopCamera();
+    setScannedCode(data);
+    
+    // Store full code without truncation
+    setPixData(prev => ({
+      ...prev,
+      method: 'qr-code',
+      code: data,
+      amount: '',
+      recipient: data.length > 50 ? data.substring(0, 50) + '...' : data
+    }));
+    
+    setCurrentStep('confirm-amount');
   };
 
   const handleCopyPaste = () => {
     if (!pixData.code.trim()) {
-      toast.error('Cole o código PIX no campo acima');
+      setErrorMessage('Cole o código PIX no campo acima');
       return;
     }
     
-    // Simulate parsing PIX code
+    setErrorMessage('');
     setPixData(prev => ({
       ...prev,
       method: 'copy-paste',
-      amount: '250.00',
-      recipient: 'Maria Silva Santos'
+      amount: '',
+      recipient: prev.code.length > 50 ? prev.code.substring(0, 50) + '...' : prev.code
     }));
     setCurrentStep('confirm-amount');
-    toast.success('Código PIX processado!');
   };
 
   const handleManualKey = () => {
     if (!pixData.key.trim()) {
-      toast.error('Digite uma chave PIX válida');
+      setErrorMessage('Digite uma chave PIX válida');
       return;
     }
     
+    setErrorMessage('');
     setPixData(prev => ({
       ...prev,
       method: 'manual-key',
-      recipient: 'Destinatário'
+      code: prev.key,
+      recipient: prev.key.length > 50 ? prev.key.substring(0, 50) + '...' : prev.key
     }));
     setCurrentStep('confirm-amount');
   };
@@ -90,14 +242,16 @@ export const PixWithdraw: React.FC<PixWithdrawProps> = ({
     const amount = parseFloat(pixData.amount.replace(',', '.'));
     
     if (!amount || amount <= 0) {
-      toast.error('Digite um valor válido');
+      setErrorMessage('Digite um valor válido');
       return;
     }
     
     if (amount > balance) {
-      toast.error('Valor excede o saldo disponível');
+      setErrorMessage('Valor excede o saldo disponível');
       return;
     }
+
+    setErrorMessage('');
 
     if (amount > 500) {
       setCurrentStep('biometric');
@@ -107,20 +261,68 @@ export const PixWithdraw: React.FC<PixWithdrawProps> = ({
   };
 
   const handleBiometricVerification = () => {
-    // Simulate biometric verification
     setTimeout(() => {
       processPixPayment();
     }, 2000);
   };
 
-  const processPixPayment = () => {
+  const processPixPayment = async () => {
     setCurrentStep('processing');
+    setIsLoading(true);
+    setError(null);
+    setSuccess(false);
     
-    // Simulate payment processing
-    setTimeout(() => {
-      setCurrentStep('receipt');
-      toast.success('PIX enviado com sucesso!');
-    }, 3000);
+    try {
+      // Get user ID from localStorage
+      const swapinUserData = localStorage.getItem('swapin_user');
+      if (!swapinUserData) {
+        throw new Error('Usuário não encontrado. Faça login novamente.');
+      }
+      
+      const userData = JSON.parse(swapinUserData);
+      const userId = userData.id;
+      
+      if (!userId) {
+        throw new Error('ID do usuário não encontrado.');
+      }
+
+      // Prepare request body
+      const requestBody = {
+        pixCode: pixData.code,
+        amount: parseFloat(pixData.amount.replace(',', '.')),
+        userId: userId
+      };
+
+      // Make API call
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/pix/send`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Erro ao processar o pagamento PIX');
+      }
+
+      const responseData = await response.json();
+      
+      setIsLoading(false);
+      setSuccess(true);
+      
+      // Wait a bit before showing receipt
+      setTimeout(() => {
+        setCurrentStep('receipt');
+      }, 1500);
+      
+    } catch (err: any) {
+      console.error('Erro ao processar PIX:', err);
+      setIsLoading(false);
+      setError(err.message || 'Ocorreu um erro ao enviar o PIX. Tente novamente.');
+      setErrorMessage(err.message || 'Ocorreu um erro ao enviar o PIX. Tente novamente.');
+    }
   };
 
   const handleShare = () => {
@@ -139,15 +341,16 @@ export const PixWithdraw: React.FC<PixWithdrawProps> = ({
       navigator.share({
         title: 'Comprovante PIX',
         text: receiptText
+      }).catch(() => {
+        navigator.clipboard.writeText(receiptText);
       });
     } else {
       navigator.clipboard.writeText(receiptText);
-      toast.success('Comprovante copiado para área de transferência!');
     }
   };
 
   return (
-    <div className="p-6 space-y-6 pb-20">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6">
       <AnimatePresence mode="wait">
         <motion.div
           key={currentStep}
@@ -157,7 +360,7 @@ export const PixWithdraw: React.FC<PixWithdrawProps> = ({
           transition={{ duration: 0.3 }}
         >
           {currentStep === 'select' && (
-            <Card className="backdrop-blur-md bg-white/10 border-white/20 p-6">
+            <div className="backdrop-blur-md bg-white/10 border border-white/20 rounded-2xl p-6">
               <h2 className="text-lg font-semibold text-white mb-4">
                 Como você quer pagar?
               </h2>
@@ -202,132 +405,218 @@ export const PixWithdraw: React.FC<PixWithdrawProps> = ({
                   </div>
                 </button>
               </div>
-            </Card>
+            </div>
           )}
 
           {currentStep === 'qr-code' && (
-            <Card className="backdrop-blur-md bg-white/10 border-white/20 p-6">
-              <h2 className="text-lg font-semibold text-white mb-4">
-                Escaneie o QR Code
-              </h2>
+            <div className="backdrop-blur-md bg-white/10 border border-white/20 rounded-2xl p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-semibold text-white">
+                  Escaneie o QR Code
+                </h2>
+                <button
+                  onClick={() => {
+                    stopCamera();
+                    setCurrentStep('select');
+                  }}
+                  className="text-gray-400 hover:text-white"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
               
               <div className="space-y-6">
-                <div className="relative">
-                  <div className="w-64 h-64 mx-auto bg-gray-800 rounded-2xl flex items-center justify-center border-2 border-dashed border-gray-600">
-                    {!isScanning ? (
-                      <div className="text-center">
-                        <Camera className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                        <p className="text-gray-400 text-sm">Aponte a câmera para o QR Code</p>
-                      </div>
-                    ) : (
-                      <div className="text-center">
-                        <div className="w-12 h-12 border-2 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                        <p className="text-green-400 text-sm">Lendo QR Code...</p>
+                <div className="relative w-full max-w-md mx-auto">
+                  <div className="relative bg-black rounded-2xl overflow-hidden" style={{ paddingBottom: '100%' }}>
+                    {/* Video container */}
+                    <div className="absolute inset-0">
+                      <video
+                        ref={videoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="w-full h-full object-cover"
+                        style={{ 
+                          display: isScanning ? 'block' : 'none',
+                          transform: 'scaleX(-1)'
+                        }}
+                      />
+                      <canvas ref={canvasRef} style={{ display: 'none' }} />
+                    </div>
+                    
+                    {/* Placeholder when not scanning */}
+                    {!isScanning && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
+                        <div className="text-center">
+                          <Camera className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                          <p className="text-gray-400 text-sm">Aponte a câmera para o QR Code</p>
+                        </div>
                       </div>
                     )}
+                    
+                    {/* Scanning overlay - only show when scanning */}
+                    {isScanning && (
+                      <>
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <div className="w-48 h-48 border-2 border-green-500 rounded-xl relative">
+                            <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-green-500 rounded-tl-lg" />
+                            <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-green-500 rounded-tr-lg" />
+                            <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-green-500 rounded-bl-lg" />
+                            <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-green-500 rounded-br-lg" />
+                            
+                            {/* Scanning line animation */}
+                            <div className="absolute inset-0 overflow-hidden rounded-xl">
+                              <div 
+                                className="w-full h-1 bg-green-400 shadow-lg shadow-green-400/50"
+                                style={{
+                                  animation: 'scan 2s ease-in-out infinite'
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="absolute bottom-4 left-0 right-0 text-center">
+                          <p className="text-white text-sm bg-black/70 py-2 px-4 rounded-full inline-block">
+                            🔍 Procurando QR Code...
+                          </p>
+                        </div>
+                      </>
+                    )}
                   </div>
-                  
-                  {!isScanning && (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-48 h-48 border-2 border-green-500 rounded-xl opacity-50">
-                        <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-green-500" />
-                        <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-green-500" />
-                        <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-green-500" />
-                        <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-green-500" />
-                      </div>
-                    </div>
-                  )}
                 </div>
 
-                <Button
-                  onClick={handleQRCodeScan}
-                  disabled={isScanning}
-                  className="w-full bg-green-600 hover:bg-green-700 py-3"
+                {cameraError && (
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4">
+                    <p className="text-red-400 text-sm">{cameraError}</p>
+                  </div>
+                )}
+
+                {scannedCode && (
+                  <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4">
+                    <p className="text-green-400 text-sm font-mono break-all">
+                      {scannedCode.length > 100 ? scannedCode.substring(0, 100) + '...' : scannedCode}
+                    </p>
+                  </div>
+                )}
+
+                <button
+                  onClick={isScanning ? stopCamera : startCamera}
+                  disabled={!jsQRLoaded && !isScanning}
+                  className={`w-full py-3 rounded-xl font-semibold transition-colors ${
+                    isScanning
+                      ? 'bg-red-600 hover:bg-red-700 text-white'
+                      : 'bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 disabled:cursor-not-allowed'
+                  }`}
                 >
-                  {isScanning ? 'Escaneando...' : 'Iniciar Câmera'}
-                </Button>
+                  {!jsQRLoaded && !isScanning ? 'Carregando...' : isScanning ? 'Parar Câmera' : 'Iniciar Câmera'}
+                </button>
               </div>
-            </Card>
+            </div>
           )}
 
           {currentStep === 'copy-paste' && (
-            <Card className="backdrop-blur-md bg-white/10 border-white/20 p-6">
+            <div className="backdrop-blur-md bg-white/10 border border-white/20 rounded-2xl p-6">
               <h2 className="text-lg font-semibold text-white mb-4">
                 Cole o código PIX
               </h2>
               
               <div className="space-y-4">
+                {errorMessage && (
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4">
+                    <p className="text-red-400 text-sm">{errorMessage}</p>
+                  </div>
+                )}
+                
                 <div>
                   <label className="text-white font-semibold mb-2 block">
                     Código PIX copiado
                   </label>
                   <textarea
                     value={pixData.code}
-                    onChange={(e) => setPixData(prev => ({...prev, code: e.target.value}))}
+                    onChange={(e) => {
+                      setPixData(prev => ({...prev, code: e.target.value}));
+                      setErrorMessage('');
+                    }}
                     placeholder="00020126580014BR.GOV.BCB.PIX..."
                     className="w-full h-24 bg-gray-800/50 border border-gray-600 rounded-xl p-3 text-white placeholder-gray-500 resize-none"
                   />
                 </div>
 
-                <Button
+                <button
                   onClick={handleCopyPaste}
                   disabled={!pixData.code.trim()}
-                  className="w-full bg-blue-600 hover:bg-blue-700 py-3"
+                  className="w-full bg-blue-600 hover:bg-blue-700 py-3 rounded-xl text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Processar Código PIX
-                </Button>
+                </button>
               </div>
-            </Card>
+            </div>
           )}
 
           {currentStep === 'manual-key' && (
-            <Card className="backdrop-blur-md bg-white/10 border-white/20 p-6">
+            <div className="backdrop-blur-md bg-white/10 border border-white/20 rounded-2xl p-6">
               <h2 className="text-lg font-semibold text-white mb-4">
                 Digite a chave PIX
               </h2>
               
               <div className="space-y-4">
+                {errorMessage && (
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4">
+                    <p className="text-red-400 text-sm">{errorMessage}</p>
+                  </div>
+                )}
+                
                 <div>
                   <label className="text-white font-semibold mb-2 block">
                     Chave PIX do destinatário
                   </label>
-                  <Input
+                  <input
                     value={pixData.key}
-                    onChange={(e) => setPixData(prev => ({...prev, key: e.target.value}))}
+                    onChange={(e) => {
+                      setPixData(prev => ({...prev, key: e.target.value}));
+                      setErrorMessage('');
+                    }}
                     placeholder="CPF, email, celular ou chave aleatória"
-                    className="bg-gray-800/50 border-gray-600 text-white"
+                    className="w-full bg-gray-800/50 border border-gray-600 rounded-xl p-3 text-white placeholder-gray-500"
                   />
                   <p className="text-gray-400 text-sm mt-1">
                     Ex: 000.000.000-00, email@exemplo.com, (11) 99999-9999
                   </p>
                 </div>
 
-                <Button
+                <button
                   onClick={handleManualKey}
                   disabled={!pixData.key.trim()}
-                  className="w-full bg-purple-600 hover:bg-purple-700 py-3"
+                  className="w-full bg-purple-600 hover:bg-purple-700 py-3 rounded-xl text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Continuar
-                </Button>
+                </button>
               </div>
-            </Card>
+            </div>
           )}
 
           {currentStep === 'confirm-amount' && (
-            <Card className="backdrop-blur-md bg-white/10 border-white/20 p-6">
+            <div className="backdrop-blur-md bg-white/10 border border-white/20 rounded-2xl p-6">
               <h2 className="text-lg font-semibold text-white mb-4">
                 Confirme os dados
               </h2>
               
               <div className="space-y-4">
+                {errorMessage && (
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4">
+                    <p className="text-red-400 text-sm">{errorMessage}</p>
+                  </div>
+                )}
+                
                 <div className="bg-gray-800/50 rounded-xl p-4">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
-                      <DollarSign className="w-5 h-5 text-white" />
+                      <QrCode className="w-5 h-5 text-white" />
                     </div>
-                    <div>
-                      <p className="text-gray-400 text-sm">Para</p>
-                      <p className="text-white font-semibold">{pixData.recipient}</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-gray-400 text-sm">Código PIX</p>
+                      <p className="text-white font-mono text-sm break-all">{pixData.recipient}</p>
                     </div>
                   </div>
                 </div>
@@ -336,12 +625,15 @@ export const PixWithdraw: React.FC<PixWithdrawProps> = ({
                   <label className="text-white font-semibold mb-2 block">
                     Valor a enviar
                   </label>
-                  <MaskedInput
-                    mask="money"
+                  <input
+                    type="text"
                     value={pixData.amount}
-                    onChange={(value) => setPixData(prev => ({...prev, amount: value}))}
+                    onChange={(e) => {
+                      setPixData(prev => ({...prev, amount: e.target.value}));
+                      setErrorMessage('');
+                    }}
                     placeholder="R$ 0,00"
-                    className="bg-gray-800/50 border-gray-600 text-white text-xl"
+                    className="w-full bg-gray-800/50 border border-gray-600 rounded-xl p-3 text-white text-xl"
                   />
                   <p className="text-gray-400 text-sm mt-1">
                     Disponível: R$ {balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -360,19 +652,19 @@ export const PixWithdraw: React.FC<PixWithdrawProps> = ({
                   </div>
                 )}
 
-                <Button
+                <button
                   onClick={handleConfirmAmount}
                   disabled={!pixData.amount || parseFloat(pixData.amount.replace(',', '.')) <= 0}
-                  className="w-full bg-green-600 hover:bg-green-700 py-3"
+                  className="w-full bg-green-600 hover:bg-green-700 py-3 rounded-xl text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Confirmar PIX
-                </Button>
+                </button>
               </div>
-            </Card>
+            </div>
           )}
 
           {currentStep === 'biometric' && (
-            <Card className="backdrop-blur-md bg-white/10 border-white/20 p-6 text-center">
+            <div className="backdrop-blur-md bg-white/10 border border-white/20 rounded-2xl p-6 text-center">
               <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
                 <Shield className="w-10 h-10 text-white animate-pulse" />
               </div>
@@ -392,108 +684,123 @@ export const PixWithdraw: React.FC<PixWithdrawProps> = ({
                 </div>
               </div>
               
-              <Button
+              <button
                 onClick={handleBiometricVerification}
-                className="w-full bg-blue-600 hover:bg-blue-700 py-3"
+                className="w-full bg-blue-600 hover:bg-blue-700 py-3 rounded-xl text-white font-semibold"
               >
                 Iniciar Verificação
-              </Button>
-            </Card>
+              </button>
+            </div>
           )}
 
           {currentStep === 'processing' && (
-            <Card className="backdrop-blur-md bg-white/10 border-white/20 p-6 text-center">
+            <div className="backdrop-blur-md bg-white/10 border border-white/20 rounded-2xl p-6 text-center">
               <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-r from-green-500 to-blue-500 rounded-full flex items-center justify-center">
                 <Clock className="w-10 h-10 text-white animate-pulse" />
               </div>
               
               <h2 className="text-2xl font-bold text-white mb-4">
-                Processando PIX...
+                {isLoading ? 'Processando PIX...' : success ? 'PIX Enviado!' : 'Erro no Processamento'}
               </h2>
               
               <p className="text-gray-300 mb-6">
-                Sua transação está sendo processada
+                {isLoading ? 'Sua transação está sendo processada' : success ? 'Transação concluída com sucesso' : 'Ocorreu um problema'}
               </p>
               
-              <div className="space-y-4">
-                <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="text-gray-400">Convertendo saldo...</span>
-                    <span className="text-blue-400">100%</span>
+              {error && (
+                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-6">
+                  <div className="flex items-center gap-2 justify-center mb-2">
+                    <AlertCircle className="w-5 h-5 text-red-400" />
+                    <span className="text-red-400 font-semibold">Erro</span>
                   </div>
-                  <div className="w-full bg-gray-700 rounded-full h-2">
-                    <div className="bg-blue-500 h-2 rounded-full w-full transition-all duration-1000" />
-                  </div>
+                  <p className="text-red-400 text-sm">{error}</p>
+                  <button
+                    onClick={() => setCurrentStep('confirm-amount')}
+                    className="mt-4 w-full bg-red-600 hover:bg-red-700 py-2 rounded-xl text-white font-semibold"
+                  >
+                    Tentar Novamente
+                  </button>
                 </div>
-                
-                <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4">
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="text-gray-400">Enviando PIX...</span>
-                    <span className="text-green-400">Processando</span>
-                  </div>
-                  <div className="w-full bg-gray-700 rounded-full h-2">
-                    <div className="bg-green-500 h-2 rounded-full w-3/4 transition-all duration-2000" />
-                  </div>
+              )}
+              
+              {isLoading && (
+                <div className="space-y-4">
+                  <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
+                    <div className="flex justify-between text-sm mb-2">
+                      <span className="text-gray-400">Convertendo saldo...</span>
+                      <span className="text-blue-400">100%</span>
+</div>
+<div className="w-full bg-gray-700 rounded-full h-2">
+<div className="bg-blue-500 h-2 rounded-full w-full transition-all duration-1000" />
+</div>
+</div>              <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4">
+                <div className="flex justify-between text-sm mb-2">
+                  <span className="text-gray-400">Enviando PIX...</span>
+                  <span className="text-green-400">Processando</span>
+                </div>
+                <div className="w-full bg-gray-700 rounded-full h-2">
+                  <div className="bg-green-500 h-2 rounded-full w-3/4 transition-all duration-2000" />
                 </div>
               </div>
-            </Card>
+            </div>
+          )}          {success && (
+            <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4">
+              <CheckCircle className="w-12 h-12 text-green-400 mx-auto mb-2" />
+              <p className="text-green-400 font-semibold">Aguarde, redirecionando...</p>
+            </div>
           )}
-
-          {currentStep === 'receipt' && (
-            <Card className="backdrop-blur-md bg-white/10 border-white/20 p-6 text-center">
-              <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center">
-                <CheckCircle className="w-10 h-10 text-white" />
+        </div>
+      )}      {currentStep === 'receipt' && (
+        <div className="backdrop-blur-md bg-white/10 border border-white/20 rounded-2xl p-6 text-center">
+          <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center">
+            <CheckCircle className="w-10 h-10 text-white" />
+          </div>          <h2 className="text-2xl font-bold text-white mb-4">
+            PIX enviado com sucesso! ✅
+          </h2>          <div className="bg-gray-800/50 rounded-xl p-4 mb-6 text-left">
+            <h3 className="text-white font-semibold mb-3">🧾 Comprovante</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-400">Valor:</span>
+                <span className="text-white font-semibold">
+                  R$ {parseFloat(pixData.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
               </div>
-              
-              <h2 className="text-2xl font-bold text-white mb-4">
-                PIX enviado com sucesso! ✅
-              </h2>
-              
-              <div className="bg-gray-800/50 rounded-xl p-4 mb-6 text-left">
-                <h3 className="text-white font-semibold mb-3">🧾 Comprovante</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Valor:</span>
-                    <span className="text-white font-semibold">
-                      R$ {parseFloat(pixData.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Para:</span>
-                    <span className="text-white">{pixData.recipient}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Data:</span>
-                    <span className="text-white">{new Date().toLocaleString('pt-BR')}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">ID:</span>
-                    <span className="text-white">{Math.random().toString(36).substr(2, 9).toUpperCase()}</span>
-                  </div>
-                </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Para:</span>
+                <span className="text-white">{pixData.recipient}</span>
               </div>
-              
-              <div className="space-y-3">
-                <Button
-                  onClick={handleShare}
-                  variant="outline"
-                  className="w-full border-gray-600 text-gray-300"
-                >
-                  <Share className="w-4 h-4 mr-2" />
-                  Compartilhar Comprovante
-                </Button>
-                
-                <Button
-                  onClick={onComplete}
-                  className="w-full bg-green-600 hover:bg-green-700 py-3"
-                >
-                  Concluir
-                </Button>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Data:</span>
+                <span className="text-white">{new Date().toLocaleString('pt-BR')}</span>
               </div>
-            </Card>
-          )}
-        </motion.div>
-      </AnimatePresence>
-    </div>
-  );
-};
+              <div className="flex justify-between">
+                <span className="text-gray-400">ID:</span>
+                <span className="text-white">{Math.random().toString(36).substr(2, 9).toUpperCase()}</span>
+              </div>
+            </div>
+          </div>          <div className="space-y-3">
+            <button
+              onClick={handleShare}
+              className="w-full border border-gray-600 text-gray-300 py-3 rounded-xl font-semibold hover:bg-white/5"
+            >
+              <Share className="w-4 h-4 inline mr-2" />
+              Compartilhar Comprovante
+            </button>            <button
+              onClick={onComplete}
+              className="w-full bg-green-600 hover:bg-green-700 py-3 rounded-xl text-white font-semibold"
+            >
+              Concluir
+            </button>
+          </div>
+        </div>
+      )}
+    </motion.div>
+  </AnimatePresence>  <style>{`
+    @keyframes scan {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(192px); }
+    }
+  `}</style>
+</div>
+);
+}
