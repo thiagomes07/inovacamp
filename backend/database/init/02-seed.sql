@@ -12,7 +12,7 @@ SET @investor_count = (SELECT COUNT(*) FROM investors);
 
 -- Só popular se o banco estiver vazio
 -- USERS (Tomadores de Crédito)
-INSERT INTO users (user_id, email, password_hash, full_name, phone, cpf_cnpj, document_type, date_of_birth, credit_score, kyc_approved, document_links, financial_docs)
+INSERT INTO users (user_id, email, password_hash, full_name, phone, cpf_cnpj, document_type, date_of_birth, credit_score, calculated_score, kyc_approved, document_links, financial_docs)
 SELECT * FROM (
     SELECT 
         'u1000000-0000-0000-0000-000000000001' AS user_id,
@@ -24,13 +24,14 @@ SELECT * FROM (
         'CPF' AS document_type,
         '1990-05-15' AS date_of_birth,
         750 AS credit_score,
+        750 AS calculated_score,
         TRUE AS kyc_approved,
         '["https://s3.amazonaws.com/docs/rg_joao.pdf", "https://s3.amazonaws.com/docs/cnh_joao.pdf"]' AS document_links,
         '["https://s3.amazonaws.com/docs/extrato_joao.pdf"]' AS financial_docs
 ) AS tmp
 WHERE @user_count = 0;
 
-INSERT INTO users (user_id, email, password_hash, full_name, phone, cpf_cnpj, document_type, date_of_birth, credit_score, kyc_approved, document_links, financial_docs)
+INSERT INTO users (user_id, email, password_hash, full_name, phone, cpf_cnpj, document_type, date_of_birth, credit_score, calculated_score, kyc_approved, document_links, financial_docs)
 SELECT * FROM (
     SELECT 
         'u1000000-0000-0000-0000-000000000002' AS user_id,
@@ -42,13 +43,14 @@ SELECT * FROM (
         'CPF' AS document_type,
         '1985-08-22' AS date_of_birth,
         680 AS credit_score,
+        680 AS calculated_score,
         TRUE AS kyc_approved,
         '["https://s3.amazonaws.com/docs/rg_maria.pdf"]' AS document_links,
         '["https://s3.amazonaws.com/docs/holerite_maria.pdf"]' AS financial_docs
 ) AS tmp
 WHERE @user_count = 0;
 
-INSERT INTO users (user_id, email, password_hash, full_name, phone, cpf_cnpj, document_type, date_of_birth, credit_score, kyc_approved, document_links, financial_docs)
+INSERT INTO users (user_id, email, password_hash, full_name, phone, cpf_cnpj, document_type, date_of_birth, credit_score, calculated_score, kyc_approved, document_links, financial_docs)
 SELECT * FROM (
     SELECT 
         'u1000000-0000-0000-0000-000000000003' AS user_id,
@@ -60,6 +62,7 @@ SELECT * FROM (
         'CNPJ' AS document_type,
         '2018-03-10' AS date_of_birth,
         720 AS credit_score,
+        720 AS calculated_score,
         TRUE AS kyc_approved,
         '["https://s3.amazonaws.com/docs/contrato_social.pdf"]' AS document_links,
         '["https://s3.amazonaws.com/docs/dre_empresa.pdf", "https://s3.amazonaws.com/docs/balanco.pdf"]' AS financial_docs
@@ -153,7 +156,7 @@ SELECT * FROM (
 WHERE @investor_count = 0;
 
 -- CREDIT_REQUESTS (Solicitações de Crédito)
-INSERT INTO credit_requests (request_id, user_id, investor_id, amount_requested, duration_months, interest_rate, status, collateral_type, collateral_description, calculated_score, collateral_docs)
+INSERT INTO credit_requests (request_id, user_id, investor_id, amount_requested, duration_months, interest_rate, status, collateral_type, collateral_description, collateral_docs)
 SELECT * FROM (
     SELECT 
         'cr100000-0000-0000-0000-000000000001' AS request_id,
@@ -165,12 +168,11 @@ SELECT * FROM (
         'pending' AS status,
         'vehicle' AS collateral_type,
         'Honda Civic 2019, placa ABC1234' AS collateral_description,
-        750 AS calculated_score,
         '["https://s3.amazonaws.com/docs/doc_veiculo.pdf"]' AS collateral_docs
 ) AS tmp
 WHERE @user_count = 0;
 
-INSERT INTO credit_requests (request_id, user_id, investor_id, amount_requested, duration_months, interest_rate, status, collateral_type, collateral_description, calculated_score, collateral_docs)
+INSERT INTO credit_requests (request_id, user_id, investor_id, amount_requested, duration_months, interest_rate, status, collateral_type, collateral_description, collateral_docs)
 SELECT * FROM (
     SELECT 
         'cr100000-0000-0000-0000-000000000002' AS request_id,
@@ -182,12 +184,11 @@ SELECT * FROM (
         'approved' AS status,
         'none' AS collateral_type,
         NULL AS collateral_description,
-        680 AS calculated_score,
         NULL AS collateral_docs
 ) AS tmp
 WHERE @user_count = 0;
 
-INSERT INTO credit_requests (request_id, user_id, investor_id, amount_requested, duration_months, interest_rate, status, collateral_type, collateral_description, calculated_score, collateral_docs)
+INSERT INTO credit_requests (request_id, user_id, investor_id, amount_requested, duration_months, interest_rate, status, collateral_type, collateral_description, collateral_docs)
 SELECT * FROM (
     SELECT 
         'cr100000-0000-0000-0000-000000000003' AS request_id,
@@ -199,7 +200,6 @@ SELECT * FROM (
         'pending' AS status,
         'property' AS collateral_type,
         'Equipamentos e maquinário industrial' AS collateral_description,
-        720 AS calculated_score,
         '["https://s3.amazonaws.com/docs/nota_fiscal_equipamentos.pdf"]' AS collateral_docs
 ) AS tmp
 WHERE @user_count = 0;

@@ -17,6 +17,7 @@ from app.modules.transaction import router as transaction_router
 from app.modules.deposit import router as deposit_router
 from app.modules.open_finance import router as open_finance_router
 from app.modules.kyc import router as kyc_router
+from app.modules.score import router as score_router
 
 # Create FastAPI application
 app = FastAPI(
@@ -92,6 +93,7 @@ app.include_router(transaction_router, prefix=settings.API_V1_PREFIX)
 app.include_router(deposit_router, prefix=settings.API_V1_PREFIX)
 app.include_router(open_finance_router, prefix=settings.API_V1_PREFIX)
 app.include_router(kyc_router, prefix=settings.API_V1_PREFIX)
+app.include_router(score_router, prefix=settings.API_V1_PREFIX)
 
 
 @app.get("/")

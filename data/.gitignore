@@ -1,0 +1,12 @@
+# Ignore todos os arquivos exceto README.md
+*
+!.gitignore
+!README.md
+
+# Documentos pessoais não devem ir para o Git
+*.jpg
+*.jpeg
+*.png
+*.pdf
+*.doc
+*.docx

@@ -47,6 +47,24 @@ interface UploadedFile {
   progress: number;
 }
 
+interface ScoreUpdate {
+  old_score: number;
+  new_score: number;
+  score_change: number;
+}
+
+interface ValidationResult {
+  valid: boolean;
+  quality_score: number;
+  issues: string[];
+  confidence: number;
+  analysis: string;
+  extracted_data: Record<string, any>;
+  inferred_file_type?: string;
+  inferred_document_type?: string;
+  score_update?: ScoreUpdate;
+}
+
 export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   mission,
   onBack,
@@ -129,29 +147,29 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   const docInfo = getDocumentInstructions();
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files || []);
+    const files = Array.from(event.target.files || []) as File[];
     
     if (files.length === 0) return;
 
     // Validate file size (max 10MB each)
-    const oversizedFiles = files.filter(file => file.size > 10 * 1024 * 1024);
+    const oversizedFiles = files.filter((file: File) => file.size > 10 * 1024 * 1024);
     if (oversizedFiles.length > 0) {
       toast.error('Alguns arquivos excedem 10MB. Por favor, reduza o tamanho.');
       return;
     }
 
     // Create file objects
-    const newFiles: UploadedFile[] = files.map(file => ({
+    const newFiles: UploadedFile[] = files.map((file: File) => ({
       id: Math.random().toString(36).substr(2, 9),
       name: file.name,
       size: file.size,
       type: file.type,
       url: URL.createObjectURL(file),
-      status: 'uploading',
+      status: 'uploading' as const,
       progress: 0
     }));
 
-    setUploadedFiles(prev => [...prev, ...newFiles]);
+    setUploadedFiles((prev: UploadedFile[]) => [...prev, ...newFiles]);
     setIsUploading(true);
 
     // Simulate upload progress
@@ -166,7 +184,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
       const interval = setInterval(() => {
         progress += Math.random() * 30;
         
-        setUploadedFiles(prev => prev.map(file => 
+        setUploadedFiles((prev: UploadedFile[]) => prev.map((file: UploadedFile) => 
           file.id === fileId 
             ? { ...file, progress: Math.min(progress, 100) }
             : file
@@ -174,16 +192,16 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
 
         if (progress >= 100) {
           clearInterval(interval);
-          setUploadedFiles(prev => prev.map(file => 
+          setUploadedFiles((prev: UploadedFile[]) => prev.map((file: UploadedFile) => 
             file.id === fileId 
-              ? { ...file, status: 'uploaded', progress: 100 }
+              ? { ...file, status: 'uploaded' as const, progress: 100 }
               : file
           ));
           
           // Check if all files are uploaded
           setTimeout(() => {
-            setUploadedFiles(prev => {
-              const allUploaded = prev.every(f => f.status === 'uploaded');
+            setUploadedFiles((prev: UploadedFile[]) => {
+              const allUploaded = prev.every((f: UploadedFile) => f.status === 'uploaded');
               if (allUploaded) {
                 setIsUploading(false);
               }
@@ -196,8 +214,8 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   };
 
   const removeFile = (fileId: string) => {
-    setUploadedFiles(prev => {
-      const filtered = prev.filter(file => file.id !== fileId);
+    setUploadedFiles((prev: UploadedFile[]) => {
+      const filtered = prev.filter((file: UploadedFile) => file.id !== fileId);
       if (filtered.length === 0) {
         setIsUploading(false);
       }
@@ -213,13 +231,37 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const handleSubmit = () => {
+  const convertFileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        const base64 = reader.result as string;
+        // Remove o prefixo "data:image/jpeg;base64," ou similar
+        const base64Content = base64.split(',')[1];
+        resolve(base64Content);
+      };
+      reader.onerror = error => reject(error);
+    });
+  };
+
+  /**
+   * Submete documentos para validação via IA
+   * 
+   * Fluxo:
+   * 1. Converte arquivo para Base64
+   * 2. Envia para backend (infere file_type e document_type automaticamente)
+   * 3. Backend valida com GPT-4 Vision/Text
+   * 4. Retorna score de qualidade, análise e atualização do credit score
+   * 5. Exibe feedback visual detalhado com toast
+   */
+  const handleSubmit = async () => {
     if (uploadedFiles.length === 0) {
       toast.error('Por favor, envie pelo menos um documento.');
       return;
     }
 
-    if (uploadedFiles.some(file => file.status !== 'uploaded')) {
+    if (uploadedFiles.some((file: UploadedFile) => file.status !== 'uploaded')) {
       toast.error('Aguarde o upload de todos os arquivos.');
       return;
     }
@@ -229,13 +271,126 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
       return;
     }
 
-    // Simulate document validation
-    toast.info('Validando documentos...', { duration: 2000 });
+    setIsUploading(true);
     
-    setTimeout(() => {
-      toast.success('Documentos validados com sucesso!');
-      onSuccess();
-    }, 2000);
+    // Toast inicial
+    toast.loading('🔍 Validando documentos com IA...', { 
+      id: 'validating',
+      duration: Infinity 
+    });
+
+    try {
+      // Processar cada arquivo
+      for (const uploadedFile of uploadedFiles) {
+        // Buscar o arquivo original do input
+        const fileInput = fileInputRef.current;
+        if (!fileInput?.files) continue;
+
+        const originalFile = Array.from(fileInput.files as FileList).find(
+          (f: File) => f.name === uploadedFile.name
+        );
+
+        if (!originalFile) {
+          console.warn(`Arquivo ${uploadedFile.name} não encontrado`);
+          continue;
+        }
+
+        // Converter para Base64
+        const base64Content = await convertFileToBase64(originalFile);
+
+        // Preparar payload - backend infere file_type e document_type automaticamente
+        const payload = {
+          user_id: "u1000000-0000-0000-0000-000000000001", // TODO: Pegar do contexto do usuário
+          file_content: base64Content,
+          file_name: originalFile.name,
+          description: description || `${mission.title} - ${originalFile.name}`
+        };
+
+        // Enviar para API
+        const response = await fetch(
+          'http://localhost:8000/api/v1/score/documents/validate-single',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result: ValidationResult = await response.json();
+
+        console.log('📊 Resultado da validação:', result);
+
+        // Fechar toast de loading
+        toast.dismiss('validating');
+
+        // Verificar se documento foi validado
+        if (!result.valid) {
+          setIsUploading(false);
+          
+          // Mostrar motivos da rejeição
+          const issues = result.issues || [];
+          const issuesText = issues.slice(0, 3).join(' • ');
+          
+          toast.error(
+            `❌ Documento rejeitado\n\n${result.analysis || 'Documento não atende aos critérios.'}\n\n${issues.length > 0 ? `Problemas: ${issuesText}` : ''}`,
+            { duration: 6000 }
+          );
+          return;
+        }
+
+        // Documento válido! Mostrar resultado
+        const scoreUpdate = result.score_update;
+        
+        if (scoreUpdate) {
+          // Mostrar atualização de score
+          toast.success(
+            `✅ Documento validado!\n\n` +
+            `📊 Score: ${scoreUpdate.old_score} → ${scoreUpdate.new_score} (+${scoreUpdate.score_change} pontos)\n` +
+            `⭐ Qualidade: ${result.quality_score}/100\n\n` +
+            `${result.analysis?.substring(0, 100)}...`,
+            { duration: 8000 }
+          );
+        } else {
+          // Documento válido mas sem atualização de score
+          toast.success(
+            `✅ Documento validado!\n\n` +
+            `⭐ Qualidade: ${result.quality_score}/100\n\n` +
+            `${result.analysis?.substring(0, 100)}...`,
+            { duration: 5000 }
+          );
+        }
+
+        // Mostrar dados extraídos se disponíveis
+        if (result.extracted_data && Object.keys(result.extracted_data).length > 0) {
+          console.log('📊 Dados extraídos:', result.extracted_data);
+        }
+      }
+
+      setIsUploading(false);
+      
+      // Aguardar um momento para o usuário ver os toasts
+      setTimeout(() => {
+        onSuccess();
+      }, 2000);
+
+    } catch (error) {
+      setIsUploading(false);
+      toast.dismiss('validating');
+      console.error('Erro ao validar documentos:', error);
+      
+      toast.error(
+        `❌ Erro ao validar documentos\n\n` +
+        `${error instanceof Error ? error.message : 'Erro desconhecido'}\n\n` +
+        `Verifique sua conexão e tente novamente.`,
+        { duration: 5000 }
+      );
+    }
   };
 
   return (

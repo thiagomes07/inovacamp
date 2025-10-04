@@ -8,6 +8,7 @@ import { LenderDashboard } from './src/features/lender/LenderDashboard';
 import { AuthProvider, useAuth } from './src/shared/hooks/useAuth';
 import { WalletProvider } from './src/shared/hooks/useWallet';
 import { ToastProvider } from './src/shared/components/ui/Toast';
+import { Toaster } from './components/ui/sonner';
 
 type AppState = 'splash' | 'welcome' | 'login' | 'onboarding' | 'dashboard';
 
@@ -113,6 +114,12 @@ const App: React.FC = () => {
       <AuthProvider>
         <div className="font-sans antialiased">
           <AppContent />
+          <Toaster 
+            position="top-center"
+            expand={true}
+            richColors={true}
+            closeButton={true}
+          />
         </div>
       </AuthProvider>
     </ToastProvider>
