@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS users (
     INDEX idx_cpf_cnpj (cpf_cnpj),
     INDEX idx_kyc_approved (kyc_approved),
     profile_type ENUM('BORROWER', 'INVESTOR') DEFAULT 'BORROWER',
-    user_type ENUM('INDIVIDUAL', 'COMPANY') DEFAULT 'INDIVIDUAL'
+    user_type ENUM('INDIVIDUAL', 'COMPANY', 'EMPLOYEE') DEFAULT 'INDIVIDUAL'
 ) ENGINE=InnoDB;
 
 -- ====================================
