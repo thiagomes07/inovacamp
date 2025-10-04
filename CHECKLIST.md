@@ -102,7 +102,6 @@
 - [x] loan_controller (estrutura criada)
   - [ ] GET /loans/active (TODO)
   - [ ] POST /loans/{id}/payments (TODO)
-  - [ ] GET /loans/{id}/schedule (TODO)
 
 - [x] investment_controller (estrutura criada)
   - [ ] GET /credit-requests/marketplace (TODO)
@@ -137,7 +136,7 @@
   - [ ] POST /deposits/execute (TODO)
 
 - [x] open_finance_controller (estrutura criada)
-  - [ ] POST /open-finance/auth/initiate (TODO)
+  - POST /open-finance/auth/initiate (NÃO SERÀ IMPLEMENTADO POR HORA)
 
 - [x] kyc_controller (estrutura criada)
   - [ ] POST /kyc/facial-verification (TODO)

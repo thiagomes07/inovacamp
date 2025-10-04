@@ -23,13 +23,3 @@ def pay_loan_installment(loan_id: str, db: Session = Depends(get_db)):
     TODO: Implementar lógica de negócio.
     """
     return {"message": "Endpoint not implemented yet", "loan_id": loan_id}
-
-
-@router.get("/{loan_id}/schedule")
-def get_loan_payment_schedule(loan_id: str, db: Session = Depends(get_db)):
-    """
-    Ver cronograma de pagamento do empréstimo.
-    
-    TODO: Implementar lógica de negócio.
-    """
-    return {"message": "Endpoint not implemented yet", "loan_id": loan_id}
