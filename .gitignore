@@ -121,6 +121,16 @@ env/
 .env
 .env.local
 
+# Documentos de teste (dados pessoais)
+data/*.jpg
+data/*.jpeg
+data/*.png
+data/*.pdf
+data/*.doc
+data/*.docx
+!data/README.md
+!data/.gitignore
+
 # Arquivos Terraform
 terraform.tfvars
 *.tfstate
