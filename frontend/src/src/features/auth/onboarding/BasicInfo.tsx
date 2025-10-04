@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
-import { Button } from '../../../../components/ui/button';
-import { Input } from '../../../../components/ui/input';
-import { MaskedInput } from '../../../shared/components/ui/MaskedInput';
-import { Eye, EyeOff, Check, X } from 'lucide-react';
-import { OnboardingData } from '../OnboardingFlow';
+import React, { useState, useEffect } from "react";
+import { motion } from "motion/react";
+import { Button } from "../../../../components/ui/button";
+import { Input } from "../../../../components/ui/input";
+import { MaskedInput } from "../../../shared/components/ui/MaskedInput";
+import { Eye, EyeOff, Check, X } from "lucide-react";
+import { OnboardingData } from "../OnboardingFlow";
+import { useAuth } from "../../../shared/hooks/useAuth";
 
 interface BasicInfoProps {
   data: OnboardingData;
@@ -17,15 +18,30 @@ interface ValidationState {
   email: boolean;
   password: boolean;
   phone: boolean;
+  cpf_cnpj: boolean;
 }
 
-export const BasicInfo: React.FC<BasicInfoProps> = ({ data, onUpdate, onNext }) => {
+export const BasicInfo: React.FC<BasicInfoProps> = ({
+  data = {
+    name: "",
+    email: "",
+    password: "",
+    phone: "",
+    cpf_cnpj: "",
+    document_type: "CPF",
+    date_of_birth: "",
+  },
+  onUpdate,
+  onNext,
+}) => {
+  const { register } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [validation, setValidation] = useState<ValidationState>({
     name: false,
     email: false,
     password: false,
-    phone: false
+    phone: false,
+    cpf_cnpj: false,
   });
   const [passwordStrength, setPasswordStrength] = useState(0);
 
@@ -37,52 +53,118 @@ export const BasicInfo: React.FC<BasicInfoProps> = ({ data, onUpdate, onNext }) 
     return /\S+@\S+\.\S+/.test(email);
   };
 
-  const validatePassword = (password: string) => {
+  const calculatePasswordStrength = (password: string) => {
     let strength = 0;
     if (password.length >= 8) strength++;
     if (/[A-Z]/.test(password)) strength++;
     if (/[0-9]/.test(password)) strength++;
     if (/[^A-Za-z0-9]/.test(password)) strength++;
-    
-    setPasswordStrength(strength);
-    return strength >= 3;
+    return strength;
+  };
+
+  const validatePassword = (password: string) => {
+    return calculatePasswordStrength(password) >= 3;
   };
 
   const validatePhone = (phone: string) => {
-    return phone.replace(/\D/g, '').length === 11;
+    return phone.replace(/\D/g, "").length === 11;
+  };
+
+  const validateCpfCnpj = (cpfCnpj: string) => {
+    const cleaned = cpfCnpj.replace(/\D/g, ""); // Remove caracteres não numéricos
+
+    if (cleaned.length === 11) {
+      // Validação completa de CPF
+      let sum = 0;
+      let remainder;
+
+      for (let i = 1; i <= 9; i++) {
+        sum += parseInt(cleaned.substring(i - 1, i)) * (11 - i);
+      }
+
+      remainder = (sum * 10) % 11;
+      if (remainder === 10 || remainder === 11) remainder = 0;
+      if (remainder !== parseInt(cleaned.substring(9, 10))) return false;
+
+      sum = 0;
+      for (let i = 1; i <= 10; i++) {
+        sum += parseInt(cleaned.substring(i - 1, i)) * (12 - i);
+      }
+
+      remainder = (sum * 10) % 11;
+      if (remainder === 10 || remainder === 11) remainder = 0;
+      if (remainder !== parseInt(cleaned.substring(10, 11))) return false;
+
+      return true;
+    } else if (cleaned.length === 14) {
+      // Validação básica de CNPJ
+      return /^[0-9]{14}$/.test(cleaned);
+    }
+
+    return false;
   };
 
   useEffect(() => {
     setValidation({
-      name: validateName(data.name),
-      email: validateEmail(data.email),
-      password: validatePassword(data.password),
-      phone: validatePhone(data.phone)
+      name: validateName(data.name || ""),
+      email: validateEmail(data.email || ""),
+      password: validatePassword(data.password || ""),
+      phone: validatePhone(data.phone || ""),
+      cpf_cnpj: validateCpfCnpj(data.cpf_cnpj || ""),
     });
-  }, [data]);
+
+    // Atualiza a força da senha separadamente
+    setPasswordStrength(calculatePasswordStrength(data.password || ""));
+  }, [data.name, data.email, data.password, data.phone, data.cpf_cnpj]);
 
   const isFormValid = Object.values(validation).every(Boolean);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isFormValid) {
-      onNext();
+      try {
+        // Converte profileType e userType para maiúsculas antes de enviar
+        const formattedData = {
+          ...data,
+          profileType: data.profileType.toUpperCase(),
+          userType: data.userType.toUpperCase(),
+        };
+
+        console.log("[BasicInfo] Enviando dados de registro:", formattedData);
+        await register(formattedData);
+        onNext();
+      } catch (error) {
+        console.error("[BasicInfo] Erro ao registrar usuário:", error);
+        alert(
+          "Erro ao registrar usuário. Verifique os dados e tente novamente."
+        );
+      }
     }
   };
 
   const getPasswordStrengthColor = () => {
-    if (passwordStrength <= 1) return 'bg-red-500';
-    if (passwordStrength === 2) return 'bg-yellow-500';
-    if (passwordStrength === 3) return 'bg-blue-500';
-    return 'bg-green-500';
+    if (passwordStrength <= 1) return "bg-red-500";
+    if (passwordStrength === 2) return "bg-yellow-500";
+    if (passwordStrength === 3) return "bg-blue-500";
+    return "bg-green-500";
   };
 
   const getPasswordStrengthText = () => {
-    if (passwordStrength <= 1) return 'Fraca';
-    if (passwordStrength === 2) return 'Média';
-    if (passwordStrength === 3) return 'Boa';
-    return 'Forte';
+    if (passwordStrength <= 1) return "Fraca";
+    if (passwordStrength === 2) return "Média";
+    if (passwordStrength === 3) return "Boa";
+    return "Forte";
   };
+
+  const handleChange =
+    (field: keyof OnboardingData) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+      if (typeof onUpdate === "function") {
+        onUpdate({ [field]: e.target.value });
+      } else {
+        console.error("onUpdate is not a function");
+      }
+    };
 
   return (
     <div className="px-6 py-8 h-full flex flex-col">
@@ -91,13 +173,14 @@ export const BasicInfo: React.FC<BasicInfoProps> = ({ data, onUpdate, onNext }) 
         <h1 className="text-3xl font-bold text-white mb-4">
           Seus dados básicos
         </h1>
-        <p className="text-gray-400 text-lg">
-          Vamos criar sua conta no Swapin
-        </p>
+        <p className="text-gray-400 text-lg">Vamos criar sua conta no Swapin</p>
       </div>
 
       {/* Form */}
-      <form onSubmit={handleSubmit} className="flex-1 max-w-md mx-auto w-full space-y-6">
+      <form
+        onSubmit={handleSubmit}
+        className="flex-1 max-w-md mx-auto w-full space-y-6"
+      >
         {/* Name */}
         <motion.div
           initial={{ x: -20, opacity: 0 }}
@@ -111,10 +194,14 @@ export const BasicInfo: React.FC<BasicInfoProps> = ({ data, onUpdate, onNext }) 
             <Input
               type="text"
               value={data.name}
-              onChange={(e) => onUpdate({ name: e.target.value })}
+              onChange={handleChange("name")}
               placeholder="Seu nome completo"
               className={`bg-gray-800 border-2 text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500/50 pr-10 ${
-                data.name ? (validation.name ? 'border-green-500' : 'border-red-500') : 'border-gray-600'
+                data.name
+                  ? validation.name
+                    ? "border-green-500"
+                    : "border-red-500"
+                  : "border-gray-600"
               }`}
             />
             {data.name && (
@@ -128,7 +215,9 @@ export const BasicInfo: React.FC<BasicInfoProps> = ({ data, onUpdate, onNext }) 
             )}
           </div>
           {data.name && !validation.name && (
-            <p className="text-red-400 text-sm mt-1">Nome deve ter pelo menos 3 caracteres</p>
+            <p className="text-red-400 text-sm mt-1">
+              Nome deve ter pelo menos 3 caracteres
+            </p>
           )}
         </motion.div>
 
@@ -145,10 +234,14 @@ export const BasicInfo: React.FC<BasicInfoProps> = ({ data, onUpdate, onNext }) 
             <Input
               type="email"
               value={data.email}
-              onChange={(e) => onUpdate({ email: e.target.value })}
+              onChange={handleChange("email")}
               placeholder="seu@email.com"
               className={`bg-gray-800 border-2 text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500/50 pr-10 ${
-                data.email ? (validation.email ? 'border-green-500' : 'border-red-500') : 'border-gray-600'
+                data.email
+                  ? validation.email
+                    ? "border-green-500"
+                    : "border-red-500"
+                  : "border-gray-600"
               }`}
             />
             {data.email && (
@@ -177,12 +270,16 @@ export const BasicInfo: React.FC<BasicInfoProps> = ({ data, onUpdate, onNext }) 
           </label>
           <div className="relative">
             <Input
-              type={showPassword ? 'text' : 'password'}
+              type={showPassword ? "text" : "password"}
               value={data.password}
-              onChange={(e) => onUpdate({ password: e.target.value })}
+              onChange={handleChange("password")}
               placeholder="Crie uma senha segura"
               className={`bg-gray-800 border-2 text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500/50 pr-10 ${
-                data.password ? (validation.password ? 'border-green-500' : 'border-red-500') : 'border-gray-600'
+                data.password
+                  ? validation.password
+                    ? "border-green-500"
+                    : "border-red-500"
+                  : "border-gray-600"
               }`}
             />
             <button
@@ -190,10 +287,14 @@ export const BasicInfo: React.FC<BasicInfoProps> = ({ data, onUpdate, onNext }) 
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
             >
-              {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              {showPassword ? (
+                <EyeOff className="w-5 h-5" />
+              ) : (
+                <Eye className="w-5 h-5" />
+              )}
             </button>
           </div>
-          
+
           {/* Password strength indicator */}
           {data.password && (
             <div className="mt-2">
@@ -202,19 +303,23 @@ export const BasicInfo: React.FC<BasicInfoProps> = ({ data, onUpdate, onNext }) 
                   <div
                     key={level}
                     className={`h-1 flex-1 rounded ${
-                      level <= passwordStrength ? getPasswordStrengthColor() : 'bg-gray-600'
+                      level <= passwordStrength
+                        ? getPasswordStrengthColor()
+                        : "bg-gray-600"
                     }`}
                   />
                 ))}
               </div>
-              <p className={`text-xs ${
-                passwordStrength >= 3 ? 'text-green-400' : 'text-yellow-400'
-              }`}>
+              <p
+                className={`text-xs ${
+                  passwordStrength >= 3 ? "text-green-400" : "text-yellow-400"
+                }`}
+              >
                 Senha {getPasswordStrengthText()}
               </p>
             </div>
           )}
-          
+
           <div className="mt-2 text-xs text-gray-400">
             <p>• Mínimo 8 caracteres</p>
             <p>• Pelo menos 1 letra maiúscula</p>
@@ -232,13 +337,39 @@ export const BasicInfo: React.FC<BasicInfoProps> = ({ data, onUpdate, onNext }) 
             Celular
           </label>
           <MaskedInput
-            mask="phone"
+            mask="(99) 99999-9999"
             value={data.phone}
-            onChange={(value) => onUpdate({ phone: value })}
+            onChange={(value: string) => onUpdate({ phone: value })}
             isValid={data.phone ? validation.phone : undefined}
           />
           {data.phone && !validation.phone && (
-            <p className="text-red-400 text-sm mt-1">Número de celular inválido</p>
+            <p className="text-red-400 text-sm mt-1">
+              Número de celular inválido
+            </p>
+          )}
+        </motion.div>
+
+        {/* CPF ou CNPJ */}
+        <motion.div
+          initial={{ x: -20, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          transition={{ delay: 0.5 }}
+        >
+          <label className="block text-sm font-medium text-gray-300 mb-2">
+            CPF ou CNPJ
+          </label>
+          <MaskedInput
+            mask={
+              data.cpf_cnpj.replace(/\D/g, "").length > 11
+                ? "99.999.999/9999-99"
+                : "999.999.999-99"
+            }
+            value={data.cpf_cnpj}
+            onChange={(value) => onUpdate({ cpf_cnpj: value })}
+            isValid={data.cpf_cnpj ? validation.cpf_cnpj : undefined}
+          />
+          {data.cpf_cnpj && !validation.cpf_cnpj && (
+            <p className="text-red-400 text-sm mt-1">CPF ou CNPJ inválido</p>
           )}
         </motion.div>
 
@@ -246,7 +377,7 @@ export const BasicInfo: React.FC<BasicInfoProps> = ({ data, onUpdate, onNext }) 
         <motion.div
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.5 }}
+          transition={{ delay: 0.6 }}
           className="pt-4"
         >
           <Button

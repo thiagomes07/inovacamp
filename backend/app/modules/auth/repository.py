@@ -2,6 +2,12 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from app.models.models import User, Investor
 import uuid
+import logging  # Adicione esta importação
+
+
+# Configuração básica do logger
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 
 class AuthRepository:
@@ -26,12 +32,19 @@ class AuthRepository:
     
     def create_user(self, user_data: dict) -> User:
         """Cria novo usuário."""
-        user_data['user_id'] = str(uuid.uuid4())
-        user = User(**user_data)
-        self.db.add(user)
-        self.db.commit()
-        self.db.refresh(user)
-        return user
+        logger.info("[AuthRepository/CreateUser] Criando usuário no banco de dados")
+        try:
+            user_data['user_id'] = str(uuid.uuid4())
+            user = User(**user_data)
+            self.db.add(user)
+            self.db.commit()
+            self.db.refresh(user)
+            logger.info("[AuthRepository/CreateUser] Usuário criado com sucesso: %s", user.email)
+            return user
+        except Exception as e:
+            logger.error("[AuthRepository/CreateUser] Erro ao criar usuário: %s", str(e))
+            self.db.rollback()
+            raise
     
     def update_user(self, user_id: str, update_data: dict) -> Optional[User]:
         """Atualiza informações do usuário."""

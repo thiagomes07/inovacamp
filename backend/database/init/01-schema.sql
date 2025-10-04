@@ -29,7 +29,9 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_email (email),
     INDEX idx_cpf_cnpj (cpf_cnpj),
-    INDEX idx_kyc_approved (kyc_approved)
+    INDEX idx_kyc_approved (kyc_approved),
+    profile_type ENUM('BORROWER', 'INVESTOR') DEFAULT 'BORROWER',
+    user_type ENUM('INDIVIDUAL', 'COMPANY') DEFAULT 'INDIVIDUAL'
 ) ENGINE=InnoDB;
 
 -- ====================================

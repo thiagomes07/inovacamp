@@ -2,6 +2,7 @@ from typing import Optional, Tuple, Dict, Any
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from datetime import datetime
+import logging  # Adicione esta importação
 
 from .repository import AuthRepository
 from app.core.security import (
@@ -13,6 +14,10 @@ from app.core.security import (
 )
 from app.core.config import settings
 
+# Configuração básica do logger
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+
 
 class AuthService:
     """Service layer para lógica de negócio de autenticação."""
@@ -22,97 +27,58 @@ class AuthService:
         self.repository = AuthRepository(db)
     
     def register(self, data: dict) -> Tuple[dict, dict]:
-        """
-        Registra novo usuário ou investidor.
-        
-        Args:
-            data: Dicionário com dados de registro contendo:
-                - email: str
-                - password: str
-                - confirm_password: str
-                - full_name: str
-                - cpf_cnpj: str
-                - phone: str (opcional)
-                - date_of_birth: str ou date (opcional)
-                - is_investor: bool
-                - investor_type: str (se is_investor=True)
-                - risk_profile: str (se is_investor=True)
-                - investment_capacity: float (se is_investor=True)
-        
-        Returns:
-            Tuple[tokens_dict, user_data_dict]
-        """
-        # Validação básica
-        if data.get('password') != data.get('confirm_password'):
+        logger.info("[AuthService/Register] Iniciando registro do usuário")
+
+        # Renomear o campo 'name' para 'full_name'
+        data["full_name"] = data.pop("name", None)
+
+        # Renomear o campo 'profileType' para 'profile_type' e garantir que esteja em maiúsculas
+        data["profile_type"] = data.pop("profileType", "borrower").upper()
+
+        # Renomear o campo 'userType' para 'user_type' e garantir que esteja em maiúsculas
+        data["user_type"] = data.pop("userType", "individual").upper()
+
+        # Substituir string vazia por None para 'date_of_birth'
+        if not data.get("date_of_birth"):
+            data["date_of_birth"] = None
+
+        # Verifica se o email já está em uso
+        if self.repository.get_user_by_email(data["email"]):
+            logger.error("[AuthService/Register] Email já está em uso")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Passwords do not match"
+                detail="Email já está em uso."
             )
-        
-        is_investor = data.get('is_investor', False)
-        
-        # Verificar se email já existe
-        if is_investor:
-            existing = self.repository.get_investor_by_email(data['email'])
-            if existing:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Email already registered"
-                )
-            existing_doc = self.repository.get_investor_by_cpf_cnpj(data['cpf_cnpj'])
-            if existing_doc:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="CPF/CNPJ already registered"
-                )
-        else:
-            existing = self.repository.get_user_by_email(data['email'])
-            if existing:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Email already registered"
-                )
-            existing_doc = self.repository.get_user_by_cpf_cnpj(data['cpf_cnpj'])
-            if existing_doc:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="CPF/CNPJ already registered"
-                )
-        
-        # Hash da senha
-        password_hash = get_password_hash(data['password'])
-        
-        # Determinar tipo de documento
-        document_type = 'CNPJ' if len(data['cpf_cnpj']) == 14 else 'CPF'
-        
-        # Preparar dados para o banco
-        entity_data = {
-            "email": data['email'],
-            "password_hash": password_hash,
-            "full_name": data['full_name'],
-            "phone": data.get('phone'),
-            "cpf_cnpj": data['cpf_cnpj'],
-            "document_type": document_type,
-            "date_of_birth": data.get('date_of_birth'),
+
+        # Verifica se o CPF/CNPJ já está em uso
+        if self.repository.get_user_by_cpf_cnpj(data["cpf_cnpj"]):
+            logger.error("[AuthService/Register] CPF ou CNPJ já está em uso")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="CPF ou CNPJ já está em uso."
+            )
+
+        # Cria o hash da senha e remove o campo 'password'
+        data["password_hash"] = get_password_hash(data.pop("password"))
+
+        # Cria o usuário no banco de dados
+        try:
+            user = self.repository.create_user(data)
+            logger.info("[AuthService/Register] Usuário criado com sucesso: %s", user.email)
+        except Exception as e:
+            logger.error("[AuthService/Register] Erro ao criar usuário: %s", str(e))
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erro ao criar usuário no banco de dados."
+            )
+
+        # Gera tokens de autenticação
+        tokens = {
+            "access_token": create_access_token({"sub": user.email}),
+            "refresh_token": create_refresh_token({"sub": user.email}),
         }
-        
-        # Criar entidade
-        if is_investor:
-            entity = self.repository.create_investor(entity_data)
-            entity_id = entity.investor_id
-            user_type = "investor"
-        else:
-            entity = self.repository.create_user(entity_data)
-            entity_id = entity.user_id
-            user_type = "user"
-        
-        # Gerar tokens
-        tokens = self._generate_tokens(entity_id, data['email'], user_type)
-        
-        # Preparar resposta
-        user_response = self._entity_to_dict(entity, user_type)
-        
-        return tokens, user_response
+
+        return tokens, user.to_dict()
     
     def login(self, email: str, password: str) -> Tuple[dict, dict]:
         """
