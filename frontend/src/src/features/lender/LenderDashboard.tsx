@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Card } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
@@ -17,10 +17,12 @@ import {
   Search,
   Filter,
   Clock,
-  LogOut
+  LogOut,
+  RefreshCw
 } from 'lucide-react';
 import { useAuth } from '../../shared/hooks/useAuth';
 import { useWallet } from '../../shared/hooks/useWallet';
+import { usePortfolio } from '../../shared/hooks/usePortfolio';
 import { BottomNavigation } from '../../shared/components/ui/BottomNavigation';
 import { DepositFlow } from './deposit/DepositFlow';
 import { WithdrawFlow } from './withdraw/WithdrawFlow';
@@ -33,98 +35,64 @@ type DashboardView = 'main' | 'deposit' | 'withdraw' | 'invest' | 'create-pool' 
 
 export const LenderDashboard: React.FC = () => {
   const { user, logout } = useAuth();
-  const { balance, availableBalance, investedBalance } = useWallet();
+  const { balance: walletBalance, availableBalance, investedBalance } = useWallet();
+  
+  // TODO: Substituir por ID do contexto do usuário quando implementado
+  const INVESTOR_ID = 'i1000000-0000-0000-0000-000000000001'; // Carlos Investidor - investor com dados de teste
+  
+  // Hook do portfólio com cache no localStorage
+  const {
+    portfolioData,
+    isLoading: portfolioLoading,
+    error: portfolioError,
+    refresh: refreshPortfolio,
+    balance,
+    pools,
+    directInvestments,
+    opportunities,
+    performance
+  } = usePortfolio(INVESTOR_ID);
+  
   const [currentView, setCurrentView] = useState<DashboardView>('main');
   const [userTypeFilter, setUserTypeFilter] = useState('');
   const [riskFilter, setRiskFilter] = useState('');
   const [selectedOpportunity, setSelectedOpportunity] = useState<any>(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [investAmount, setInvestAmount] = useState('');
-
-  const mockPools = [
-    {
-      id: '1',
-      name: 'Diversificação Brasil',
-      totalCapital: 50000,
-      allocated: 35000,
-      loans: 7,
-      maxLoans: 10,
-      averageReturn: 18.5,
-      status: 'active' as const
-    },
-    {
-      id: '2',
-      name: 'Renda Fixa Plus',
-      totalCapital: 25000,
-      allocated: 25000,
-      loans: 5,
-      maxLoans: 5,
-      averageReturn: 16.2,
-      status: 'complete' as const
+  
+  // Recarregar dados quando voltar para a view principal
+  useEffect(() => {
+    if (currentView === 'main' && !portfolioLoading) {
+      refreshPortfolio();
     }
-  ];
-
-  const mockDirectInvestments = [
-    {
-      id: '1',
-      borrower: 'Maria Silva',
-      amount: 5000,
-      return: 19.5,
-      status: 'active',
-      nextPayment: '2024-10-15'
-    },
-    {
-      id: '2',
-      borrower: 'João Santos',
-      amount: 3000,
-      return: 17.8,
-      status: 'active',
-      nextPayment: '2024-10-12'
+  }, [currentView]);
+  
+  // Handler para refresh manual
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    toast.info('Atualizando dados do portfólio...');
+    
+    try {
+      await refreshPortfolio();
+      toast.success('Portfólio atualizado!');
+    } catch (err) {
+      toast.error('Erro ao atualizar portfólio');
+    } finally {
+      setIsRefreshing(false);
     }
-  ];
+  };
 
-  const mockOpportunities = [
-    {
-      id: '1',
-      borrower: 'Ana Costa',
-      amount: 8000,
-      purpose: 'Capital de giro',
-      rate: 20.5,
-      term: 12,
-      score: 780,
-      riskLevel: 'low' as const
-    },
-    {
-      id: '2',
-      borrower: 'Pedro Lima',
-      amount: 15000,
-      purpose: 'Expansão negócio',
-      rate: 18.2,
-      term: 18,
-      score: 650,
-      riskLevel: 'medium' as const
-    },
-    {
-      id: '3',
-      borrower: 'Carlos Silva',
-      amount: 5000,
-      purpose: 'Equipamentos',
-      rate: 22.8,
-      term: 6,
-      score: 580,
-      riskLevel: 'high' as const
-    }
-  ];
-
-  const totalUSDC = availableBalance.usdc + investedBalance.usdc;
+  // Calcular totais (usar dados do portfólio ou fallback para wallet)
+  const totalUSDC = balance.total > 0 ? balance.total : (availableBalance.usdc + investedBalance.usdc);
   const totalBRL = totalUSDC * 5.015; // Mock exchange rate
+  const availableUSDC = balance.available > 0 ? balance.available : availableBalance.usdc;
+  const investedUSDC = balance.invested > 0 ? balance.invested : investedBalance.usdc;
 
   // Filter opportunities based on selected filters
-  const filteredOpportunities = mockOpportunities.filter(opportunity => {
+  const filteredOpportunities = opportunities.filter(opportunity => {
     const matchesRisk = !riskFilter || opportunity.riskLevel === riskFilter;
-    // For userType, we'd need to add a userType field to mockOpportunities, 
-    // but for now just checking risk filter since that's what was requested
     return matchesRisk;
   });
 
@@ -448,9 +416,17 @@ export const LenderDashboard: React.FC = () => {
                 </Button>
                 <Button
                   onClick={() => {
+                    // Limpar localStorage
+                    localStorage.removeItem('portfolio_data');
+                    localStorage.removeItem('auth_token');
+                    localStorage.removeItem('user_data');
+                    
                     logout();
                     setShowLogoutModal(false);
                     toast.success('Logout realizado com sucesso!');
+                    
+                    // Redirecionar para landing page
+                    window.location.href = '/';
                   }}
                   className="flex-1 bg-red-600 hover:bg-red-700 text-white border-red-600"
                 >
@@ -477,14 +453,25 @@ export const LenderDashboard: React.FC = () => {
             <p className="text-gray-400">Dashboard de investimentos</p>
           </div>
           
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowLogoutModal(true)}
-            className="w-12 h-12 rounded-full bg-gray-800/50 border border-gray-600 hover:border-red-500 transition-colors"
-          >
-            <LogOut className="w-5 h-5 text-red-500" />
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="w-10 h-10 rounded-full bg-gray-800/50 border border-gray-600 hover:border-blue-500 transition-colors"
+            >
+              <RefreshCw className={`w-4 h-4 text-blue-400 ${isRefreshing ? 'animate-spin' : ''}`} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowLogoutModal(true)}
+              className="w-10 h-10 rounded-full bg-gray-800/50 border border-gray-600 hover:border-red-500 transition-colors"
+            >
+              <LogOut className="w-4 h-4 text-red-500" />
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -515,13 +502,13 @@ export const LenderDashboard: React.FC = () => {
                 <div>
                   <p className="text-gray-400">Disponível</p>
                   <p className="text-green-400 font-semibold">
-                    {availableBalance.usdc.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} USDC
+                    {portfolioLoading ? '...' : availableUSDC.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} USDC
                   </p>
                 </div>
                 <div>
                   <p className="text-gray-400">Investido</p>
                   <p className="text-blue-400 font-semibold">
-                    {investedBalance.usdc.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} USDC
+                    {portfolioLoading ? '...' : investedUSDC.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} USDC
                   </p>
                 </div>
               </div>
@@ -579,15 +566,21 @@ export const LenderDashboard: React.FC = () => {
             
             <div className="grid grid-cols-3 gap-4">
               <div className="text-center">
-                <p className="text-2xl font-bold text-green-400">+18.2%</p>
+                <p className="text-2xl font-bold text-green-400">
+                  {portfolioLoading ? '...' : `+${((performance.total_received / performance.total_invested) * 100 || 0).toFixed(1)}%`}
+                </p>
                 <p className="text-gray-400 text-sm">Rendimento (12m)</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-blue-400">12</p>
+                <p className="text-2xl font-bold text-blue-400">
+                  {portfolioLoading ? '...' : performance.active_loans}
+                </p>
                 <p className="text-gray-400 text-sm">Ativos Ativos</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-purple-400">17.8%</p>
+                <p className="text-2xl font-bold text-purple-400">
+                  {portfolioLoading ? '...' : `${performance.average_rate.toFixed(1)}%`}
+                </p>
                 <p className="text-gray-400 text-sm">Taxa Média</p>
               </div>
             </div>
@@ -617,53 +610,63 @@ export const LenderDashboard: React.FC = () => {
             </div>
             
             <div className="space-y-3">
-              {mockPools.map((pool) => (
-                <div 
-                  key={pool.id}
-                  className="bg-gray-800/50 rounded-xl p-4 border border-gray-700"
-                >
-                  <div className="flex justify-between items-start mb-3">
-                    <div>
-                      <h3 className="text-white font-semibold">{pool.name}</h3>
-                      <p className="text-gray-400 text-sm">
-                        R$ {pool.totalCapital.toLocaleString('pt-BR')} de capital
-                      </p>
-                    </div>
-                    <Badge 
-                      className={pool.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-blue-500/20 text-blue-400'}
-                    >
-                      {pool.status === 'active' ? 'Ativa' : 'Completa'}
-                    </Badge>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4 text-sm mb-3">
-                    <div>
-                      <p className="text-gray-400">Alocado</p>
-                      <p className="text-white">
-                        R$ {pool.allocated.toLocaleString('pt-BR')} ({Math.round(pool.allocated / pool.totalCapital * 100)}%)
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-400">Empréstimos</p>
-                      <p className="text-white">{pool.loans}/{pool.maxLoans}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <span className="text-green-400 font-semibold">
-                      +{pool.averageReturn}% a.a.
-                    </span>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      className="border-blue-600 text-white bg-transparent hover:bg-blue-600/10"
-                      onClick={() => setCurrentView('manage-pool')}
-                    >
-                      Gerenciar
-                    </Button>
-                  </div>
+              {portfolioLoading ? (
+                <div className="text-center py-4 text-gray-400">
+                  Carregando pools...
                 </div>
-              ))}
+              ) : pools.length === 0 ? (
+                <div className="text-center py-4 text-gray-400">
+                  Você ainda não possui pools
+                </div>
+              ) : (
+                pools.map((pool) => (
+                  <div 
+                    key={pool.id}
+                    className="bg-gray-800/50 rounded-xl p-4 border border-gray-700"
+                  >
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <h3 className="text-white font-semibold">{pool.name}</h3>
+                        <p className="text-gray-400 text-sm">
+                          {pool.totalCapital.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} USDC de capital
+                        </p>
+                      </div>
+                      <Badge 
+                        className={pool.status === 'active' ? 'bg-green-500/20 text-green-400' : pool.status === 'funding' ? 'bg-blue-500/20 text-blue-400' : 'bg-gray-500/20 text-gray-400'}
+                      >
+                        {pool.status === 'active' ? 'Ativa' : pool.status === 'funding' ? 'Captando' : 'Encerrada'}
+                      </Badge>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4 text-sm mb-3">
+                      <div>
+                        <p className="text-gray-400">Alocado</p>
+                        <p className="text-white">
+                          {pool.allocated.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} USDC ({Math.round(pool.allocated / pool.totalCapital * 100)}%)
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400">Empréstimos</p>
+                        <p className="text-white">{pool.loans}/{pool.maxLoans}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-between items-center">
+                      <span className="text-green-400 font-semibold">
+                        +{pool.averageReturn.toFixed(1)}% a.a.
+                      </span>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="border-blue-600 text-white bg-transparent hover:bg-blue-600/10"
+                        onClick={() => setCurrentView('manage-pool')}
+                      >
+                        Gerenciar
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </Card>
         </motion.div>
@@ -684,34 +687,46 @@ export const LenderDashboard: React.FC = () => {
             </div>
             
             <div className="space-y-3">
-              {mockDirectInvestments.map((investment) => (
-                <div 
-                  key={investment.id}
-                  className="flex items-center justify-between p-3 bg-gray-800/30 rounded-xl"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-full flex items-center justify-center">
-                      <span className="text-white text-sm font-semibold">
-                        {investment.borrower.charAt(0)}
-                      </span>
-                    </div>
-                    <div>
-                      <p className="text-white text-sm font-semibold">{investment.borrower}</p>
-                      <p className="text-gray-400 text-xs">
-                        R$ {investment.amount.toLocaleString('pt-BR')} • {investment.return}% a.a.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <Badge className="bg-green-500/20 text-green-400 mb-1">
-                      Ativo
-                    </Badge>
-                    <p className="text-gray-400 text-xs">
-                      Próximo: {investment.nextPayment}
-                    </p>
-                  </div>
+              {portfolioLoading ? (
+                <div className="text-center py-4 text-gray-400">
+                  Carregando investimentos...
                 </div>
-              ))}
+              ) : directInvestments.length === 0 ? (
+                <div className="text-center py-4 text-gray-400">
+                  Você ainda não possui investimentos diretos
+                </div>
+              ) : (
+                directInvestments.map((investment) => (
+                  <div 
+                    key={investment.id}
+                    className="flex items-center justify-between p-3 bg-gray-800/30 rounded-xl"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-full flex items-center justify-center">
+                        <span className="text-white text-sm font-semibold">
+                          {investment.borrower.charAt(0)}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-white text-sm font-semibold">{investment.borrower}</p>
+                        <p className="text-gray-400 text-xs">
+                          {investment.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} USDC • {investment.return.toFixed(1)}% a.a.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <Badge className="bg-green-500/20 text-green-400 mb-1">
+                        {investment.status === 'active' ? 'Ativo' : investment.status}
+                      </Badge>
+                      {investment.nextPayment && (
+                        <p className="text-gray-400 text-xs">
+                          Próximo: {new Date(investment.nextPayment).toLocaleDateString('pt-BR')}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </Card>
         </motion.div>
