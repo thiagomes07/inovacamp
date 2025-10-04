@@ -17,9 +17,9 @@ class ProfileType(str, enum.Enum):
 
 
 class UserType(str, enum.Enum):
-    INDIVIDUAL = "individual"
-    COMPANY = "company"
-
+    INDIVIDUAL = "INDIVIDUAL" # Mantenha maiúsculo para consistência com o DB
+    COMPANY = "COMPANY"
+    EMPLOYEE = "EMPLOYEE"     # <--- Lugar certo
 
 class User(Base):
     __tablename__ = "users"

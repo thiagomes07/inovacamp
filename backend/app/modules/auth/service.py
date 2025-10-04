@@ -27,58 +27,78 @@ class AuthService:
         self.repository = AuthRepository(db)
     
     def register(self, data: dict) -> Tuple[dict, dict]:
-        logger.info("[AuthService/Register] Iniciando registro do usuário")
+        logger.info("[AuthService/Register] Iniciando registro")
 
-        # Renomear o campo 'name' para 'full_name'
         data["full_name"] = data.pop("name", None)
+        
+        # ✅ NORMALIZAÇÃO: Traduz LENDER para INVESTOR
+        profile_type_from_request = data.pop("profileType", "BORROWER").upper()
+        if profile_type_from_request == "LENDER":
+            profile_type = "INVESTOR"
+        else:
+            profile_type = profile_type_from_request
 
-        # Renomear o campo 'profileType' para 'profile_type' e garantir que esteja em maiúsculas
-        data["profile_type"] = data.pop("profileType", "borrower").upper()
+        # Adiciona o user_type se não for um investidor
+        if profile_type != "INVESTOR":
+            data["user_type"] = data.pop("userType", "individual").upper()
 
-        # Renomear o campo 'userType' para 'user_type' e garantir que esteja em maiúsculas
-        data["user_type"] = data.pop("userType", "individual").upper()
-
-        # Substituir string vazia por None para 'date_of_birth'
         if not data.get("date_of_birth"):
             data["date_of_birth"] = None
 
-        # Verifica se o email já está em uso
-        if self.repository.get_user_by_email(data["email"]):
+        # --- LÓGICA DE VALIDAÇÃO E CRIAÇÃO ATUALIZADA ---
+        
+        # 1. Verifica duplicidade em ambas as tabelas
+        email = data["email"]
+        cpf_cnpj = data["cpf_cnpj"]
+        if self.repository.get_user_by_email(email) or self.repository.get_investor_by_email(email):
             logger.error("[AuthService/Register] Email já está em uso")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email já está em uso."
             )
-
-        # Verifica se o CPF/CNPJ já está em uso
-        if self.repository.get_user_by_cpf_cnpj(data["cpf_cnpj"]):
+        if self.repository.get_user_by_cpf_cnpj(cpf_cnpj) or self.repository.get_investor_by_cpf_cnpj(cpf_cnpj):
             logger.error("[AuthService/Register] CPF ou CNPJ já está em uso")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="CPF ou CNPJ já está em uso."
             )
 
-        # Cria o hash da senha e remove o campo 'password'
         data["password_hash"] = get_password_hash(data.pop("password"))
 
-        # Cria o usuário no banco de dados
+        # 2. Direciona para o repositório correto baseado no profile_type normalizado
+        entity = None
+        entity_type_for_token = ""
         try:
-            user = self.repository.create_user(data)
-            logger.info("[AuthService/Register] Usuário criado com sucesso: %s", user.email)
+            if profile_type == "INVESTOR":
+                logger.info("[AuthService/Register] Criando um INVESTIDOR")
+                # Remove campos que não existem na tabela investors
+                data.pop("userType", None) # Remove userType se ainda existir
+                
+                entity = self.repository.create_investor(data)
+                entity_type_for_token = "investor"
+                logger.info("[AuthService/Register] Investidor criado com sucesso: %s", entity.email)
+            else: # Padrão é BORROWER (User)
+                logger.info("[AuthService/Register] Criando um USUÁRIO (Tomador)")
+                # Garante que o profile_type correto seja salvo para o usuário
+                data["profile_type"] = profile_type
+                entity = self.repository.create_user(data)
+                entity_type_for_token = "user"
+                logger.info("[AuthService/Register] Usuário criado com sucesso: %s", entity.email)
+
         except Exception as e:
-            logger.error("[AuthService/Register] Erro ao criar usuário: %s", str(e))
+            logger.error("[AuthService/Register] Erro ao criar no banco de dados: %s", str(e))
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Erro ao criar usuário no banco de dados."
             )
 
-        # Gera tokens de autenticação
-        tokens = {
-            "access_token": create_access_token({"sub": user.email}),
-            "refresh_token": create_refresh_token({"sub": user.email}),
-        }
+        # 3. Gera tokens e resposta com base na entidade criada
+        entity_id = entity.user_id if hasattr(entity, 'user_id') else entity.investor_id
+        tokens = self._generate_tokens(entity_id, entity.email, entity_type_for_token)
+        
+        user_response = self._entity_to_dict(entity, entity_type_for_token)
 
-        return tokens, user.to_dict()
+        return tokens, user_response
     
     def login(self, email: str, password: str) -> Tuple[dict, dict]:
         """
@@ -223,13 +243,15 @@ class AuthService:
         }
     
     def _entity_to_dict(self, entity: Any, user_type: str) -> dict:
-        """Converte entidade SQLAlchemy para dicionário."""
         if user_type == "user":
             return {
                 "user_id": entity.user_id,
                 "email": entity.email,
                 "full_name": entity.full_name,
                 "phone": entity.phone,
+                # ✅ ADICIONADO: Lendo os tipos diretamente da entidade User
+                "profile_type": entity.profile_type.value if hasattr(entity.profile_type, 'value') else entity.profile_type,
+                "user_type": entity.user_type.value if hasattr(entity.user_type, 'value') else entity.user_type,
                 "cpf_cnpj": entity.cpf_cnpj,
                 "document_type": entity.document_type.value if hasattr(entity.document_type, 'value') else entity.document_type,
                 "date_of_birth": entity.date_of_birth.isoformat() if entity.date_of_birth else None,
@@ -240,10 +262,12 @@ class AuthService:
             }
         else:  # investor
             return {
-                "investor_id": entity.investor_id,
+                "user_id": entity.investor_id, # Padronizado para user_id para consistência no frontend
                 "email": entity.email,
                 "full_name": entity.full_name,
                 "phone": entity.phone,
+                # ✅ ADICIONADO: Tipo de perfil implícito para investidores
+                "profile_type": "INVESTOR",
                 "cpf_cnpj": entity.cpf_cnpj,
                 "document_type": entity.document_type.value if hasattr(entity.document_type, 'value') else entity.document_type,
                 "date_of_birth": entity.date_of_birth.isoformat() if entity.date_of_birth else None,

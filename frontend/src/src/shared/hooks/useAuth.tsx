@@ -13,7 +13,7 @@ interface User {
   name: string;
   email: string;
   phone: string;
-  profileType: "borrower" | "lender";
+  profileType: "borrower" | "lender"; // Mantemos em minúsculo, é o nosso padrão no frontend
   userType?: "individual" | "company" | "employee";
   avatar?: string;
   isVerified: boolean;
@@ -21,6 +21,23 @@ interface User {
   score: number;
   scoreLevel: "Bronze" | "Silver" | "Gold" | "Platinum";
 }
+
+const transformApiUser = (apiUser: any): User => {
+  return {
+    id: apiUser.user_id,
+    name: apiUser.full_name,
+    email: apiUser.email,
+    phone: apiUser.phone,
+    // ✅ CORREÇÃO: Acessa de forma segura e define um valor padrão se não existir.
+    profileType: apiUser.profile_type?.toLowerCase() ?? "borrower", 
+    userType: apiUser.user_type?.toLowerCase(), // O optional chaining aqui já ajuda
+    isVerified: apiUser.kyc_approved,
+    score: apiUser.credit_score,
+    kycStatus: apiUser.kycStatus || "pending",
+    scoreLevel: apiUser.scoreLevel || "Bronze",
+    avatar: apiUser.avatar || undefined,
+  };
+};
 
 interface AuthContextType {
   user: User | null;
@@ -53,11 +70,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // Alterado para true para cobrir a verificação inicial
 
   useEffect(() => {
     // Check for stored user session
-    const storedUser = localStorage.getItem("swapin_user");
+    const storedUser = localStorage.getItem("swapin_user"); // Chave correta
     if (storedUser) {
       setUser(JSON.parse(storedUser));
     }
@@ -84,11 +101,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       const data = await response.json();
       console.log("[useAuth] Login bem-sucedido:", data);
 
-      // Armazena todos os dados no localStorage
-      localStorage.setItem("user", JSON.stringify(data.user));
+      const transformedUser = transformApiUser(data.user);
+
+      // ALTERADO: Corrigimos a chave e salvamos o objeto transformado
+      localStorage.setItem("swapin_user", JSON.stringify(transformedUser));
       localStorage.setItem("tokens", JSON.stringify(data.tokens));
 
-      setUser(data.user);
+      setUser(transformedUser);
     } catch (error) {
       console.error("[useAuth] Erro ao fazer login:", error);
       throw error;
@@ -117,11 +136,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       const data = await response.json();
       console.log("[useAuth] Registro bem-sucedido:", data);
 
-      // Armazena todos os dados no localStorage
-      localStorage.setItem("user", JSON.stringify(data.user));
+      const transformedUser = transformApiUser(data.user);
+
+      // ALTERADO: Corrigimos a chave e salvamos o objeto transformado
+      localStorage.setItem("swapin_user", JSON.stringify(transformedUser));
       localStorage.setItem("tokens", JSON.stringify(data.tokens));
 
-      setUser(data.user);
+      setUser(transformedUser);
     } catch (error) {
       console.error("[useAuth] Erro ao registrar:", error);
       throw error;
@@ -134,6 +155,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     console.log("[useAuth] Realizando logout...");
     setUser(null);
     localStorage.removeItem("swapin_user");
+    localStorage.removeItem("tokens");
   };
 
   return (
