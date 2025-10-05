@@ -37,6 +37,15 @@ export const LenderDashboard: React.FC = () => {
   const { user, logout } = useAuth();
   const { balance: walletBalance, availableBalance, investedBalance, getTotalBalanceInBRL, refreshBalance } = useWallet();
   
+  // Conversão USDC <-> BRL (1 USDC = R$ 5,15)
+  const USDC_TO_BRL = parseFloat(import.meta.env.VITE_USDC_TO_BRL_RATE || '5.15');
+  const BRL_TO_USDC = 1 / USDC_TO_BRL;
+  
+  // Função helper para converter BRL para USDC
+  const convertBRLToUSDC = (brl: number): number => {
+    return brl * BRL_TO_USDC;
+  };
+  
   // TODO: Substituir por ID do contexto do usuário quando implementado
   const INVESTOR_ID = 'i1000000-0000-0000-0000-000000000001'; // Carlos Investidor - investor com dados de teste
   
@@ -94,7 +103,7 @@ export const LenderDashboard: React.FC = () => {
   const fetchRealOpportunities = async () => {
     setIsLoadingOpportunities(true);
     try {
-      const response = await fetch('http://localhost:8000/api/v1/credit/opportunities');
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/credit/opportunities`);
       if (response.ok) {
         const data = await response.json();
         setRealOpportunities(data);
@@ -126,11 +135,11 @@ export const LenderDashboard: React.FC = () => {
     }
   };
 
-  // Calcular totais (usar saldo real da carteira)
+  // Calcular totais (converter BRL para USDC para exibição)
   const totalBRL = availableBalance.brl + investedBalance.brl;
-  const totalUSDC = availableBalance.usdc + investedBalance.usdc;
-  const availableUSDC = availableBalance.usdc;
-  const investedUSDC = investedBalance.usdc;
+  const totalUSDC = convertBRLToUSDC(totalBRL);
+  const availableUSDC = convertBRLToUSDC(availableBalance.brl);
+  const investedUSDC = convertBRLToUSDC(investedBalance.brl);
   const availableBRL = availableBalance.brl;
   const investedBRL = investedBalance.brl;
 
@@ -158,7 +167,7 @@ export const LenderDashboard: React.FC = () => {
       return;
     }
     
-    if (parseFloat(investAmount) > availableBalance.usdc) {
+    if (parseFloat(investAmount) > availableUSDC) {
       toast.error('Saldo insuficiente');
       return;
     }
@@ -217,7 +226,7 @@ export const LenderDashboard: React.FC = () => {
             toast.success(`Investimento de R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} realizado em ${selectedOpportunity.borrower_name || selectedOpportunity.borrower}!`);
             setCurrentView('main');
           }}
-          availableBalance={availableBalance.usdc}
+          availableBalance={availableUSDC}
         />
         
         {/* Bottom Navigation */}

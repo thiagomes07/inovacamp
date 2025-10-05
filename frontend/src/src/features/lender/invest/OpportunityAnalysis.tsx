@@ -39,12 +39,26 @@ export const OpportunityAnalysis: React.FC<OpportunityAnalysisProps> = ({
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // Conversão USDC <-> BRL (1 USDC = R$ 5,15)
+  const USDC_TO_BRL = parseFloat(import.meta.env.VITE_USDC_TO_BRL_RATE || '5.15');
+  const BRL_TO_USDC = 1 / USDC_TO_BRL;
+
   // Helper function to extract numeric value from formatted string
   const getNumericValue = (value: string): number => {
     if (!value) return 0;
     // Remove $ symbol, spaces, commas and extract number
     const numbers = value.replace(/[^\d.]/g, '');
     return parseFloat(numbers) || 0;
+  };
+
+  // Conversão de BRL para USDC para exibição
+  const convertBRLToUSDC = (brl: number): number => {
+    return brl * BRL_TO_USDC;
+  };
+
+  // Conversão de USDC para BRL para API
+  const convertUSDCToBRL = (usdc: number): number => {
+    return usdc * USDC_TO_BRL;
   };
 
   const mockProfile = {
@@ -108,6 +122,9 @@ export const OpportunityAnalysis: React.FC<OpportunityAnalysisProps> = ({
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
 
+      // Converter USDC para BRL para enviar ao backend
+      const amountInBRL = convertUSDCToBRL(amount);
+
       // Call API to invest
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/credit/invest`, {
         method: 'POST',
@@ -117,7 +134,7 @@ export const OpportunityAnalysis: React.FC<OpportunityAnalysisProps> = ({
         body: JSON.stringify({
           investor_id: investorId,
           credit_request_id: opportunity.credit_request_id,
-          amount: amount,
+          amount: amountInBRL,
           interest_rate: opportunity.interest_rate || 2.5
         })
       });
@@ -198,6 +215,12 @@ export const OpportunityAnalysis: React.FC<OpportunityAnalysisProps> = ({
                   <span className="text-gray-400">Valor do investimento:</span>
                   <span className="text-white font-semibold">
                     ${getNumericValue(investAmount).toLocaleString('en-US', { minimumFractionDigits: 2 })} USDC
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">Equivalente em BRL:</span>
+                  <span className="text-gray-300">
+                    R$ {convertUSDCToBRL(getNumericValue(investAmount)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
                 <div className="flex justify-between">
