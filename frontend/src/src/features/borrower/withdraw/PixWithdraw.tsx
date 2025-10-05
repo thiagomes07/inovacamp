@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { 
   QrCode, 
   Copy, 
@@ -327,14 +326,14 @@ export const PixWithdraw: React.FC<PixWithdrawProps> = ({
 
   const handleShare = () => {
     const receiptText = `
-🧾 Comprovante PIX - Swapin
+      🧾 Comprovante PIX - Swapin
 
-💰 Valor: R$ ${parseFloat(pixData.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-👤 Para: ${pixData.recipient}
-📅 Data: ${new Date().toLocaleString('pt-BR')}
-🔢 ID: ${Math.random().toString(36).substr(2, 9).toUpperCase()}
+      💰 Valor: R$ ${parseFloat(pixData.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+      👤 Para: ${pixData.recipient}
+      📅 Data: ${new Date().toLocaleString('pt-BR')}
+      🔢 ID: ${Math.random().toString(36).substr(2, 9).toUpperCase()}
 
-✅ Transação realizada com sucesso
+      ✅ Transação realizada com sucesso
     `;
     
     if (navigator.share) {
@@ -351,14 +350,8 @@ export const PixWithdraw: React.FC<PixWithdrawProps> = ({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6">
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={currentStep}
-          initial={{ x: 20, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          exit={{ x: -20, opacity: 0 }}
-          transition={{ duration: 0.3 }}
-        >
+      <div>
+        <div key={currentStep}>
           {currentStep === 'select' && (
             <div className="backdrop-blur-md bg-white/10 border border-white/20 rounded-2xl p-6">
               <h2 className="text-lg font-semibold text-white mb-4">
@@ -794,8 +787,8 @@ export const PixWithdraw: React.FC<PixWithdrawProps> = ({
           </div>
         </div>
       )}
-    </motion.div>
-  </AnimatePresence>  <style>{`
+    </div>
+  </div>  <style>{`
     @keyframes scan {
       0%, 100% { transform: translateY(0); }
       50% { transform: translateY(192px); }
