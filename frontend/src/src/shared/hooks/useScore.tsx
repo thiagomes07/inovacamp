@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from "react";
 
 interface ScoreData {
   user_id: string;
@@ -25,21 +25,23 @@ export const useScore = (userId: string) => {
       setIsLoading(true);
       setError(null);
 
-      const response = await fetch(`http://localhost:8000/api/v1/score/${userId}`);
-      
+      const response = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL}/score/${userId}`
+      );
+
       if (!response.ok) {
-        throw new Error('Erro ao buscar score');
+        throw new Error("Erro ao buscar score");
       }
 
       const data: ScoreData = await response.json();
-      
-      console.log('[useScore] Score atualizado:', data);
-      
+
+      console.log("[useScore] Score atualizado:", data);
+
       setScoreData(data);
       setScore(data.score);
     } catch (err) {
-      console.error('[useScore] Erro ao buscar score:', err);
-      setError(err instanceof Error ? err.message : 'Erro desconhecido');
+      console.error("[useScore] Erro ao buscar score:", err);
+      setError(err instanceof Error ? err.message : "Erro desconhecido");
     } finally {
       setIsLoading(false);
     }

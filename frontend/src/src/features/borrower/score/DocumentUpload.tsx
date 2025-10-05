@@ -308,7 +308,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
 
         // Enviar para API
         const response = await fetch(
-          'http://localhost:8000/api/v1/score/documents/validate-single',
+          `${import.meta.env.VITE_API_BASE_URL}/score/documents/validate-single`,
           {
             method: 'POST',
             headers: {
