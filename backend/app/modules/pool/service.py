@@ -2,9 +2,11 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from typing import Dict, List, Any
 from datetime import datetime
+import uuid
 
 from .repository import PoolRepository
-from app.models.models import PoolStatus, LoanStatus
+from app.modules.wallet.repository import WalletRepository
+from app.models.models import PoolStatus, LoanStatus, RiskProfile
 
 
 class PoolService:
@@ -13,12 +15,75 @@ class PoolService:
     def __init__(self, db: Session):
         self.db = db
         self.repository = PoolRepository(db)
+        self.wallet_repository = WalletRepository(db)
     
     def create_pool(self, data: dict) -> dict:
-        """Cria novo pool de investimento."""
-        # TODO: Validar parâmetros do pool
-        # TODO: Implementar regras de negócio
-        pool = self.repository.create_pool(data)
+        """Cria novo pool de investimento com débito da carteira."""
+        # Validações obrigatórias
+        investor_id = data.get('investor_id')
+        target_amount = data.get('target_amount')
+        name = data.get('name')
+        duration_months = data.get('duration_months')
+        expected_return = data.get('expected_return')
+        
+        if not all([investor_id, target_amount, name, duration_months]):
+            raise HTTPException(
+                status_code=400,
+                detail="Campos obrigatórios: investor_id, target_amount, name, duration_months"
+            )
+        
+        if target_amount < 1000:
+            raise HTTPException(
+                status_code=400,
+                detail="O capital mínimo é R$ 1.000"
+            )
+        
+        if expected_return and expected_return <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="O retorno esperado deve ser maior que zero"
+            )
+        
+        # Busca carteira BRL do investidor
+        wallets = self.wallet_repository.get_wallet_by_owner(investor_id, 'INVESTOR')
+        brl_wallet = next((w for w in wallets if w.currency == 'BRL'), None)
+        
+        if not brl_wallet:
+            raise HTTPException(
+                status_code=404,
+                detail="Carteira não encontrada"
+            )
+        
+        # Valida saldo suficiente
+        if float(brl_wallet.balance) < target_amount:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Saldo insuficiente. Disponível: R$ {float(brl_wallet.balance):.2f}"
+            )
+        
+        # Cria pool
+        pool_data = {
+            'pool_id': str(uuid.uuid4()),
+            'investor_id': investor_id,
+            'name': name,
+            'target_amount': target_amount,
+            'raised_amount': target_amount,  # Pool já começa com capital total
+            'duration_months': duration_months,
+            'expected_return': expected_return or 0,
+            'status': PoolStatus.ACTIVE,
+            'risk_profile': RiskProfile[data.get('risk_profile', 'MEDIUM').upper()],
+            'min_score': data.get('min_score', 700),
+            'requires_collateral': data.get('requires_collateral', False),
+            'min_interest_rate': data.get('min_interest_rate', 0),
+            'max_term_months': data.get('max_term_months', 24),
+        }
+        
+        pool = self.repository.create_pool(pool_data)
+        
+        # Debita da carteira
+        new_balance = float(brl_wallet.balance) - target_amount
+        self.wallet_repository.update_balance(brl_wallet.wallet_id, new_balance)
+        
         return self._pool_to_dict(pool)
     
     def list_pools(self, status: str = None) -> List[dict]:

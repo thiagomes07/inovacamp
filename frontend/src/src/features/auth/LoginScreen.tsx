@@ -185,19 +185,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               {isLoading ? 'Entrando...' : 'Entrar'}
             </Button>
           </form>
-
-          {/* Demo accounts */}
-          <div className="mt-8 p-4 bg-gray-800/50 rounded-xl border border-gray-700">
-            <p className="text-sm text-gray-400 mb-3">Contas de demonstração:</p>
-            <div className="space-y-2 text-xs">
-              <p className="text-gray-300">
-                <span className="font-medium">Tomador:</span> borrower@demo.com / 123456
-              </p>
-              <p className="text-gray-300">
-                <span className="font-medium">Investidor:</span> lender@demo.com / 123456
-              </p>
-            </div>
-          </div>
         </motion.div>
       </div>
     </div>

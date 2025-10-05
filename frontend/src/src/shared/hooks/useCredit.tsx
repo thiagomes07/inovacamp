@@ -1,5 +1,12 @@
-import { useState, useCallback } from 'react';
-import { useAuth } from './useAuth';
+import { useState, useCallback } from "react";
+import { useAuth } from "./useAuth";
+
+export interface LocationData {
+  latitude: number;
+  longitude: number;
+  timestamp: string;
+  accuracy?: number;
+}
 
 export interface CreditRequest {
   id: string;
@@ -10,16 +17,17 @@ export interface CreditRequest {
   monthlyPayment: number;
   purpose?: string;
   collateral?: {
-    type: 'vehicle' | 'property' | 'equipment' | 'receivables';
+    type: "vehicle" | "property" | "equipment" | "receivables";
     description: string;
     value: number;
     documents: File[];
   };
-  approvalType: 'automatic' | 'manual' | 'both';
-  status: 'pending' | 'approved' | 'rejected' | 'analyzing';
+  approvalType: "automatic" | "manual" | "both";
+  location?: LocationData;
+  status: "pending" | "approved" | "rejected" | "analyzing";
   createdAt: string;
   approvedBy?: {
-    type: 'pool' | 'individual';
+    type: "pool" | "individual";
     name: string;
     id: string;
   };
@@ -35,9 +43,9 @@ export interface Loan {
   paidInstallments: number;
   remainingAmount: number;
   nextPaymentDate: string;
-  status: 'active' | 'completed' | 'overdue';
+  status: "active" | "completed" | "overdue";
   lender: {
-    type: 'pool' | 'individual';
+    type: "pool" | "individual";
     name: string;
     id: string;
   };
@@ -48,7 +56,9 @@ interface UseCreditReturn {
   creditRequests: CreditRequest[];
   activeLoans: Loan[];
   isLoading: boolean;
-  requestCredit: (request: Omit<CreditRequest, 'id' | 'status' | 'createdAt'>) => Promise<void>;
+  requestCredit: (
+    request: Omit<CreditRequest, "id" | "status" | "createdAt">
+  ) => Promise<CreditRequest | undefined>;
   payInstallment: (loanId: string, amount: number) => Promise<void>;
   getCreditLimit: () => number;
   getAvailableCredit: () => number;
@@ -58,153 +68,189 @@ export const useCredit = (): UseCreditReturn => {
   const { user } = useAuth();
   const [creditRequests, setCreditRequests] = useState<CreditRequest[]>([
     {
-      id: '1',
+      id: "1",
       amount: 5000,
       installments: 12,
       interestRate: 18.5,
       totalAmount: 5925,
       monthlyPayment: 493.75,
-      approvalType: 'automatic',
-      status: 'approved',
-      createdAt: '2024-10-01T10:00:00Z',
+      approvalType: "automatic",
+      status: "approved",
+      createdAt: "2024-10-01T10:00:00Z",
       approvedBy: {
-        type: 'pool',
-        name: 'Pool Diversificação Brasil',
-        id: 'pool-1'
-      }
-    }
+        type: "pool",
+        name: "Pool Diversificação Brasil",
+        id: "pool-1",
+      },
+    },
   ]);
 
   const [activeLoans, setActiveLoans] = useState<Loan[]>([
     {
-      id: '1',
-      creditRequestId: '1',
+      id: "1",
+      creditRequestId: "1",
       amount: 5000,
       installments: 12,
       interestRate: 18.5,
       monthlyPayment: 493.75,
       paidInstallments: 1,
       remainingAmount: 4506.25,
-      nextPaymentDate: '2024-11-01',
-      status: 'active',
+      nextPaymentDate: "2024-11-01",
+      status: "active",
       lender: {
-        type: 'pool',
-        name: 'Pool Diversificação Brasil',
-        id: 'pool-1'
+        type: "pool",
+        name: "Pool Diversificação Brasil",
+        id: "pool-1",
       },
-      createdAt: '2024-10-01T10:00:00Z'
-    }
+      createdAt: "2024-10-01T10:00:00Z",
+    },
   ]);
 
   const [isLoading, setIsLoading] = useState(false);
 
-  const requestCredit = useCallback(async (request: Omit<CreditRequest, 'id' | 'status' | 'createdAt'>) => {
-    setIsLoading(true);
+  const requestCredit = useCallback(
+    async (request: Omit<CreditRequest, "id" | "status" | "createdAt">) => {
+      setIsLoading(true);
 
-    try {
-      // TODO: POST /api/credit/request
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      try {
+        if (!user?.id) {
+          throw new Error("Usuário não autenticado");
+        }
 
-      const newRequest: CreditRequest = {
-        ...request,
-        id: Math.random().toString(36).substr(2, 9),
-        status: 'analyzing',
-        createdAt: new Date().toISOString()
-      };
+        if (!request.location) {
+          throw new Error("Dados de localização são obrigatórios");
+        }
 
-      setCreditRequests(prev => [newRequest, ...prev]);
+        // Mapear collateral para formato do backend
+        const collateralDocs =
+          request.collateral?.documents.map((file) => file.name) || [];
 
-      // Simulate automatic pool matching
-      if (request.approvalType === 'automatic' || request.approvalType === 'both') {
-        setTimeout(() => {
-          // Mock pool matching logic
-          const isApproved = Math.random() > 0.3; // 70% approval rate for demo
-          
-          if (isApproved) {
-            setCreditRequests(prev => 
-              prev.map(req => 
-                req.id === newRequest.id 
-                  ? { 
-                      ...req, 
-                      status: 'approved',
-                      approvedBy: {
-                        type: 'pool',
-                        name: 'Pool Diversificação Brasil',
-                        id: 'pool-1'
-                      }
-                    }
-                  : req
-              )
-            );
+        const payload = {
+          user_id: user.id,
+          amount_requested: request.amount,
+          duration_months: request.installments,
+          interest_rate: request.interestRate,
+          approval_type: request.approvalType,
+          collateral_type: request.collateral?.type.toUpperCase() || "NONE",
+          collateral_description: request.collateral?.description,
+          collateral_docs: collateralDocs,
+          // Location data
+          location: {
+            latitude: request.location.latitude,
+            longitude: request.location.longitude,
+            timestamp: request.location.timestamp,
+            accuracy: request.location.accuracy,
+          },
+        };
 
-            // Create active loan
-            const newLoan: Loan = {
-              id: Math.random().toString(36).substr(2, 9),
-              creditRequestId: newRequest.id,
-              amount: request.amount,
-              installments: request.installments,
-              interestRate: request.interestRate,
-              monthlyPayment: request.monthlyPayment,
-              paidInstallments: 0,
-              remainingAmount: request.totalAmount,
-              nextPaymentDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-              status: 'active',
-              lender: {
-                type: 'pool',
-                name: 'Pool Diversificação Brasil',
-                id: 'pool-1'
-              },
-              createdAt: new Date().toISOString()
-            };
+        console.log("Sending credit request with location:", payload);
 
-            setActiveLoans(prev => [newLoan, ...prev]);
-          } else if (request.approvalType === 'both') {
-            // Send to manual marketplace
-            setCreditRequests(prev => 
-              prev.map(req => 
-                req.id === newRequest.id 
-                  ? { ...req, status: 'pending' }
-                  : req
-              )
-            );
-          } else {
-            setCreditRequests(prev => 
-              prev.map(req => 
-                req.id === newRequest.id 
-                  ? { ...req, status: 'rejected' }
-                  : req
-              )
-            );
+        const response = await fetch(
+          '${import.meta.env.VITE_API_BASE_URL}/credit/request',
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
           }
-        }, 3000);
+        );
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.detail || "Erro ao solicitar crédito");
+        }
+
+        const result = await response.json();
+        const creditRequestData = result.data;
+
+        const newRequest: CreditRequest = {
+          id: creditRequestData.request_id,
+          amount: request.amount,
+          installments: request.installments,
+          interestRate: request.interestRate,
+          totalAmount: request.totalAmount,
+          monthlyPayment: request.monthlyPayment,
+          purpose: request.purpose,
+          collateral: request.collateral,
+          approvalType: request.approvalType,
+          location: request.location,
+          status:
+            creditRequestData.status === "APPROVED"
+              ? "approved"
+              : creditRequestData.status === "REJECTED"
+              ? "rejected"
+              : "analyzing",
+          createdAt: creditRequestData.requested_at,
+        };
+
+        setCreditRequests((prev) => [newRequest, ...prev]);
+
+        // Se foi aprovado, criar o loan ativo
+        if (result.approved) {
+          const newLoan: Loan = {
+            id: creditRequestData.request_id, // Será o loan_id criado no backend
+            creditRequestId: creditRequestData.request_id,
+            amount: request.amount,
+            installments: request.installments,
+            interestRate: request.interestRate,
+            monthlyPayment: request.monthlyPayment,
+            paidInstallments: 0,
+            remainingAmount: request.totalAmount,
+            nextPaymentDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+              .toISOString()
+              .split("T")[0],
+            status: "active",
+            lender: {
+              type: "pool",
+              name: "Pool Automática",
+              id: creditRequestData.pool_id || "pool-auto",
+            },
+            createdAt: new Date().toISOString(),
+          };
+
+          setActiveLoans((prev) => [newLoan, ...prev]);
+
+          newRequest.status = "approved";
+          newRequest.approvedBy = {
+            type: "pool",
+            name: "Pool Automática",
+            id: creditRequestData.pool_id || "pool-auto",
+          };
+        }
+
+        return newRequest;
+      } finally {
+        setIsLoading(false);
       }
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+    },
+    [user]
+  );
 
   const payInstallment = useCallback(async (loanId: string, amount: number) => {
     setIsLoading(true);
 
     try {
       // TODO: POST /api/credit/pay
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await new Promise((resolve) => setTimeout(resolve, 1500));
 
-      setActiveLoans(prev => 
-        prev.map(loan => {
+      setActiveLoans((prev) =>
+        prev.map((loan) => {
           if (loan.id === loanId) {
             const newPaidInstallments = loan.paidInstallments + 1;
             const newRemainingAmount = loan.remainingAmount - amount;
             const isCompleted = newPaidInstallments >= loan.installments;
-            
+
             return {
               ...loan,
               paidInstallments: newPaidInstallments,
               remainingAmount: Math.max(0, newRemainingAmount),
-              status: isCompleted ? 'completed' as const : loan.status,
-              nextPaymentDate: isCompleted 
-                ? ''
-                : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+              status: isCompleted ? ("completed" as const) : loan.status,
+              nextPaymentDate: isCompleted
+                ? ""
+                : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+                    .toISOString()
+                    .split("T")[0],
             };
           }
           return loan;
@@ -228,9 +274,9 @@ export const useCredit = (): UseCreditReturn => {
   const getAvailableCredit = useCallback(() => {
     const totalLimit = getCreditLimit();
     const usedCredit = activeLoans
-      .filter(loan => loan.status === 'active')
+      .filter((loan) => loan.status === "active")
       .reduce((sum, loan) => sum + loan.remainingAmount, 0);
-    
+
     return Math.max(0, totalLimit - usedCredit);
   }, [getCreditLimit, activeLoans]);
 
@@ -241,6 +287,6 @@ export const useCredit = (): UseCreditReturn => {
     requestCredit,
     payInstallment,
     getCreditLimit,
-    getAvailableCredit
+    getAvailableCredit,
   };
 };

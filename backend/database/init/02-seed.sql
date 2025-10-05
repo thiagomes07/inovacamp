@@ -106,17 +106,17 @@ SELECT * FROM (
 ) AS tmp
 WHERE @investor_count = 0;
 
--- WALLETS (Carteiras)
+-- WALLETS (Carteiras) - Apenas BRL
 INSERT INTO wallets (wallet_id, owner_id, owner_type, currency, balance, blocked, wallet_address)
 SELECT * FROM (
     SELECT 
         'w1000000-0000-0000-0000-000000000001' AS wallet_id,
         'u1000000-0000-0000-0000-000000000001' AS owner_id,
         'USER' AS owner_type,
-        'USDC' AS currency,
-        5000.00 AS balance,
+        'BRL' AS currency,
+        25750.00 AS balance,
         0.00 AS blocked,
-        '0x1234567890abcdef1234567890abcdef12345678' AS wallet_address
+        NULL AS wallet_address
 ) AS tmp
 WHERE @user_count = 0;
 
@@ -126,10 +126,10 @@ SELECT * FROM (
         'w1000000-0000-0000-0000-000000000002' AS wallet_id,
         'u1000000-0000-0000-0000-000000000002' AS owner_id,
         'USER' AS owner_type,
-        'USDC' AS currency,
-        2500.00 AS balance,
+        'BRL' AS currency,
+        12875.00 AS balance,
         0.00 AS blocked,
-        '0xabcdef1234567890abcdef1234567890abcdef12' AS wallet_address
+        NULL AS wallet_address
 ) AS tmp
 WHERE @user_count = 0;
 
@@ -140,10 +140,10 @@ SELECT * FROM (
         'w1000000-0000-0000-0000-000000000005' AS wallet_id,
         'u1000000-0000-0000-0000-000000000004' AS owner_id,
         'USER' AS owner_type,
-        'USDC' AS currency,
-        1200.00 AS balance,
+        'BRL' AS currency,
+        6180.00 AS balance,
         0.00 AS blocked,
-        '0x4444567890abcdef1234567890abcdef44444444' AS wallet_address
+        NULL AS wallet_address
 ) AS tmp
 WHERE @user_count = 0;
 
@@ -153,10 +153,10 @@ SELECT * FROM (
         'w1000000-0000-0000-0000-000000000006' AS wallet_id,
         'u1000000-0000-0000-0000-000000000005' AS owner_id,
         'USER' AS owner_type,
-        'USDC' AS currency,
-        800.00 AS balance,
+        'BRL' AS currency,
+        4120.00 AS balance,
         0.00 AS blocked,
-        '0x5555567890abcdef1234567890abcdef55555555' AS wallet_address
+        NULL AS wallet_address
 ) AS tmp
 WHERE @user_count = 0;
 
@@ -166,36 +166,37 @@ SELECT * FROM (
         'w1000000-0000-0000-0000-000000000007' AS wallet_id,
         'u1000000-0000-0000-0000-000000000006' AS owner_id,
         'USER' AS owner_type,
-        'USDC' AS currency,
-        3500.00 AS balance,
+        'BRL' AS currency,
+        18025.00 AS balance,
         0.00 AS blocked,
-        '0x6666567890abcdef1234567890abcdef66666666' AS wallet_address
+        NULL AS wallet_address
 ) AS tmp
 WHERE @user_count = 0;
 
+-- Carteiras BRL para investidores
 INSERT INTO wallets (wallet_id, owner_id, owner_type, currency, balance, blocked, wallet_address)
 SELECT * FROM (
     SELECT 
-        'w1000000-0000-0000-0000-000000000003' AS wallet_id,
+        'w1000000-0000-0000-0000-000000000011' AS wallet_id,
         'i1000000-0000-0000-0000-000000000001' AS owner_id,
         'INVESTOR' AS owner_type,
-        'USDC' AS currency,
-        500000.00 AS balance,
+        'BRL' AS currency,
+        2575000.00 AS balance,
         0.00 AS blocked,
-        '0xfedcba9876543210fedcba9876543210fedcba98' AS wallet_address
+        NULL AS wallet_address
 ) AS tmp
 WHERE @investor_count = 0;
 
 INSERT INTO wallets (wallet_id, owner_id, owner_type, currency, balance, blocked, wallet_address)
 SELECT * FROM (
     SELECT 
-        'w1000000-0000-0000-0000-000000000004' AS wallet_id,
+        'w1000000-0000-0000-0000-000000000012' AS wallet_id,
         'i1000000-0000-0000-0000-000000000002' AS owner_id,
         'INVESTOR' AS owner_type,
-        'USDC' AS currency,
-        50000.00 AS balance,
+        'BRL' AS currency,
+        257500.00 AS balance,
         0.00 AS blocked,
-        '0x9876543210fedcba9876543210fedcba98765432' AS wallet_address
+        NULL AS wallet_address
 ) AS tmp
 WHERE @investor_count = 0;
 
@@ -649,11 +650,11 @@ SELECT * FROM (
         'INVESTOR' AS receiver_type,
         'w1000000-0000-0000-0000-000000000002' AS wallet_id,
         1370.00 AS amount,
-        'USDC' AS currency,
+        'BRL' AS currency,
         'LOAN_PAYMENT' AS type,
         'COMPLETED' AS status,
         'Pagamento da parcela 1/6 do emprÃ©stimo' AS description,
-        '0xabc123def456789...' AS blockchain_tx_hash
+        NULL AS blockchain_tx_hash
 ) AS tmp
 WHERE @user_count = 0;
 
@@ -665,13 +666,13 @@ SELECT * FROM (
         'INVESTOR' AS sender_type,
         'u1000000-0000-0000-0000-000000000002' AS receiver_id,
         'USER' AS receiver_type,
-        'w1000000-0000-0000-0000-000000000003' AS wallet_id,
+        'w1000000-0000-0000-0000-000000000011' AS wallet_id,
         8000.00 AS amount,
-        'USDC' AS currency,
+        'BRL' AS currency,
         'INVESTMENT' AS type,
         'COMPLETED' AS status,
         'Desembolso de emprÃ©stimo aprovado' AS description,
-        '0xdef789abc123456...' AS blockchain_tx_hash
+        NULL AS blockchain_tx_hash
 ) AS tmp
 WHERE @user_count = 0;
 

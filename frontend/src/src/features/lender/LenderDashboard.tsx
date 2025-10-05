@@ -35,7 +35,16 @@ type DashboardView = 'main' | 'deposit' | 'withdraw' | 'invest' | 'create-pool' 
 
 export const LenderDashboard: React.FC = () => {
   const { user, logout } = useAuth();
-  const { balance: walletBalance, availableBalance, investedBalance } = useWallet();
+  const { balance: walletBalance, availableBalance, investedBalance, getTotalBalanceInBRL, refreshBalance } = useWallet();
+  
+  // Conversão USDC <-> BRL (1 USDC = R$ 5,15)
+  const USDC_TO_BRL = parseFloat(import.meta.env.VITE_USDC_TO_BRL_RATE || '5.15');
+  const BRL_TO_USDC = 1 / USDC_TO_BRL;
+  
+  // Função helper para converter BRL para USDC
+  const convertBRLToUSDC = (brl: number): number => {
+    return brl * BRL_TO_USDC;
+  };
   
   // TODO: Substituir por ID do contexto do usuário quando implementado
   const INVESTOR_ID = 'i1000000-0000-0000-0000-000000000001'; // Carlos Investidor - investor com dados de teste
@@ -59,15 +68,57 @@ export const LenderDashboard: React.FC = () => {
   const [selectedOpportunity, setSelectedOpportunity] = useState<any>(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [realOpportunities, setRealOpportunities] = useState<any[]>([]);
+  const [isLoadingOpportunities, setIsLoadingOpportunities] = useState(false);
 
   const [investAmount, setInvestAmount] = useState('');
+  
+  // Carregar saldo ao montar o componente
+  useEffect(() => {
+    refreshBalance();
+  }, []);
   
   // Recarregar dados quando voltar para a view principal
   useEffect(() => {
     if (currentView === 'main' && !portfolioLoading) {
       refreshPortfolio();
+      refreshBalance(); // Atualizar saldo também
     }
   }, [currentView]);
+  
+  // Atualizar saldo quando entrar na tela de withdraw
+  useEffect(() => {
+    if (currentView === 'withdraw') {
+      refreshBalance();
+    }
+  }, [currentView]);
+  
+  // Buscar oportunidades reais quando entrar na tela de opportunities
+  useEffect(() => {
+    if (currentView === 'opportunities') {
+      fetchRealOpportunities();
+    }
+  }, [currentView]);
+  
+  const fetchRealOpportunities = async () => {
+    setIsLoadingOpportunities(true);
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/credit/opportunities`);
+      if (response.ok) {
+        const data = await response.json();
+        setRealOpportunities(data);
+        console.log('[LenderDashboard] Oportunidades carregadas:', data);
+      } else {
+        console.error('[LenderDashboard] Erro ao buscar oportunidades:', response.status);
+        toast.error('Erro ao carregar oportunidades');
+      }
+    } catch (err) {
+      console.error('[LenderDashboard] Erro ao buscar oportunidades:', err);
+      toast.error('Erro ao conectar com servidor');
+    } finally {
+      setIsLoadingOpportunities(false);
+    }
+  };
   
   // Handler para refresh manual
   const handleRefresh = async () => {
@@ -84,15 +135,20 @@ export const LenderDashboard: React.FC = () => {
     }
   };
 
-  // Calcular totais (usar dados do portfólio ou fallback para wallet)
-  const totalUSDC = balance.total > 0 ? balance.total : (availableBalance.usdc + investedBalance.usdc);
-  const totalBRL = totalUSDC * 5.015; // Mock exchange rate
-  const availableUSDC = balance.available > 0 ? balance.available : availableBalance.usdc;
-  const investedUSDC = balance.invested > 0 ? balance.invested : investedBalance.usdc;
+  // Calcular totais (converter BRL para USDC para exibição)
+  const totalBRL = availableBalance.brl + investedBalance.brl;
+  const totalUSDC = convertBRLToUSDC(totalBRL);
+  const availableUSDC = convertBRLToUSDC(availableBalance.brl);
+  const investedUSDC = convertBRLToUSDC(investedBalance.brl);
+  const availableBRL = availableBalance.brl;
+  const investedBRL = investedBalance.brl;
 
   // Filter opportunities based on selected filters
-  const filteredOpportunities = opportunities.filter(opportunity => {
-    const matchesRisk = !riskFilter || opportunity.riskLevel === riskFilter;
+  // Usar oportunidades reais da API se disponíveis, senão usar mock do portfolio
+  const opportunitiesToShow = realOpportunities.length > 0 ? realOpportunities : opportunities;
+  
+  const filteredOpportunities = opportunitiesToShow.filter((opportunity: any) => {
+    const matchesRisk = !riskFilter || opportunity.risk_level === riskFilter;
     return matchesRisk;
   });
 
@@ -111,7 +167,7 @@ export const LenderDashboard: React.FC = () => {
       return;
     }
     
-    if (parseFloat(investAmount) > availableBalance.usdc) {
+    if (parseFloat(investAmount) > availableUSDC) {
       toast.error('Saldo insuficiente');
       return;
     }
@@ -167,10 +223,10 @@ export const LenderDashboard: React.FC = () => {
           opportunity={selectedOpportunity}
           onBack={() => setCurrentView('opportunities')}
           onInvest={(amount) => {
-            toast.success(`Investimento de ${amount.toLocaleString('en-US', { minimumFractionDigits: 2 })} USDC realizado em ${selectedOpportunity.borrower}!`);
+            toast.success(`Investimento de R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} realizado em ${selectedOpportunity.borrower_name || selectedOpportunity.borrower}!`);
             setCurrentView('main');
           }}
-          availableBalance={availableBalance.usdc}
+          availableBalance={availableUSDC}
         />
         
         {/* Bottom Navigation */}
@@ -189,7 +245,7 @@ export const LenderDashboard: React.FC = () => {
         <PoolCreationFlow
           onBack={() => setCurrentView('main')}
           onComplete={() => setCurrentView('main')}
-          availableBalance={availableBalance.brl}
+          availableBalance={getTotalBalanceInBRL()}
         />
         
         {/* Bottom Navigation */}
@@ -270,30 +326,30 @@ export const LenderDashboard: React.FC = () => {
           {/* Opportunities List */}
           <div className="space-y-4">
             {filteredOpportunities.map((opportunity) => (
-              <Card key={opportunity.id} className="backdrop-blur-md bg-white/10 border-white/20 p-6">
+              <Card key={opportunity.credit_request_id || opportunity.id} className="backdrop-blur-md bg-white/10 border-white/20 p-6">
                 <div className="flex justify-between items-start mb-4">
                   <div>
                     <div className="flex items-center gap-3 mb-2">
                       <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
                         <span className="text-white font-semibold">
-                          {opportunity.borrower.charAt(0)}
+                          {(opportunity.borrower_name || opportunity.borrower || 'U').charAt(0)}
                         </span>
                       </div>
                       <div>
-                        <h3 className="text-white font-semibold">{opportunity.borrower}</h3>
+                        <h3 className="text-white font-semibold">{opportunity.borrower_name || opportunity.borrower}</h3>
                         <p className="text-gray-400 text-sm">{opportunity.purpose}</p>
                       </div>
                     </div>
                   </div>
                   <Badge 
                     className={
-                      opportunity.riskLevel === 'low' ? 'bg-green-500/20 text-green-400' :
-                      opportunity.riskLevel === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                      opportunity.risk_level === 'low' ? 'bg-green-500/20 text-green-400' :
+                      opportunity.risk_level === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
                       'bg-red-500/20 text-red-400'
                     }
                   >
-                    {opportunity.riskLevel === 'low' ? 'Baixo Risco' :
-                     opportunity.riskLevel === 'medium' ? 'Médio Risco' : 'Alto Risco'}
+                    {opportunity.risk_level === 'low' ? 'Baixo Risco' :
+                     opportunity.risk_level === 'medium' ? 'Médio Risco' : 'Alto Risco'}
                   </Badge>
                 </div>
 
@@ -306,15 +362,15 @@ export const LenderDashboard: React.FC = () => {
                   </div>
                   <div>
                     <p className="text-gray-400 text-sm">Taxa</p>
-                    <p className="text-green-400 font-semibold">{opportunity.rate}% a.a.</p>
+                    <p className="text-green-400 font-semibold">{(opportunity.interest_rate || opportunity.rate || 0)}% a.a.</p>
                   </div>
                   <div>
                     <p className="text-gray-400 text-sm">Prazo</p>
-                    <p className="text-white font-semibold">{opportunity.term} meses</p>
+                    <p className="text-white font-semibold">{(opportunity.duration_months || opportunity.term || 0)} meses</p>
                   </div>
                   <div>
                     <p className="text-gray-400 text-sm">Score</p>
-                    <p className="text-blue-400 font-semibold">{opportunity.score}</p>
+                    <p className="text-blue-400 font-semibold">{opportunity.score || 0}</p>
                   </div>
                 </div>
 
@@ -491,10 +547,10 @@ export const LenderDashboard: React.FC = () => {
             <div className="space-y-4">
               <div>
                 <p className="text-3xl font-bold text-white">
-                  {totalUSDC.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} USDC
+                  R$ {totalBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
                 <p className="text-gray-300 text-lg">
-                  ≈ R$ {totalBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  {totalUSDC.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} USDC
                 </p>
               </div>
               
@@ -502,13 +558,19 @@ export const LenderDashboard: React.FC = () => {
                 <div>
                   <p className="text-gray-400">Disponível</p>
                   <p className="text-green-400 font-semibold">
-                    {portfolioLoading ? '...' : availableUSDC.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} USDC
+                    R$ {availableBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-gray-400 text-xs">
+                    {availableUSDC.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} USDC
                   </p>
                 </div>
                 <div>
                   <p className="text-gray-400">Investido</p>
                   <p className="text-blue-400 font-semibold">
-                    {portfolioLoading ? '...' : investedUSDC.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} USDC
+                    R$ {investedBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-gray-400 text-xs">
+                    {investedUSDC.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} USDC
                   </p>
                 </div>
               </div>

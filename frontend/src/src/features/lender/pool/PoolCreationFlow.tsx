@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { MaskedInput } from '../../../shared/components/ui/MaskedInput';
 import { toast } from 'sonner@2.0.3';
+import { usePool } from '../../../shared/hooks/usePool';
 
 interface PoolCreationFlowProps {
   onBack: () => void;
@@ -45,12 +46,15 @@ interface PoolConfig {
   maxTerm: number;
 }
 
-const getNumericValue = (maskedValue: string): number => {
-  if (!maskedValue) return 0;
+const getNumericValue = (value: string | number): number => {
+  if (!value) return 0;
+  
+  // Se já for número, retorna direto
+  if (typeof value === 'number') return value;
   
   // Remove R$, espaços e pontos (separadores de milhar)
   // Mantém apenas números e vírgula decimal
-  const cleanValue = maskedValue.replace(/[R$\s\.]/g, '').replace(',', '.');
+  const cleanValue = value.replace(/[R$\s\.]/g, '').replace(',', '.');
   const result = parseFloat(cleanValue) || 0;
   
   return result;
@@ -68,8 +72,10 @@ export const PoolCreationFlow: React.FC<PoolCreationFlowProps> = ({
   onComplete,
   availableBalance
 }) => {
+  const { createPool, isLoading: poolLoading } = usePool();
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
   const [showBiometric, setShowBiometric] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
   
   const [poolConfig, setPoolConfig] = useState<PoolConfig>({
     name: '',
@@ -137,22 +143,51 @@ export const PoolCreationFlow: React.FC<PoolCreationFlowProps> = ({
     }
   };
 
-  const handleActivatePool = () => {
+  const handleActivatePool = async () => {
     // Se valor > R$ 10.000, solicitar biometria
     if (totalAmountValue > 10000) {
       setShowBiometric(true);
       return;
     }
     
-    // Simular ativação da pool
-    toast.success(`Pool "${poolConfig.name}" ativada com sucesso!`);
-    onComplete();
+    await createPoolReal();
   };
 
-  const handleBiometricSuccess = () => {
+  const handleBiometricSuccess = async () => {
     setShowBiometric(false);
-    toast.success(`Pool "${poolConfig.name}" ativada com sucesso!`);
-    onComplete();
+    await createPoolReal();
+  };
+
+  const createPoolReal = async () => {
+    setIsCreating(true);
+    
+    try {
+      const collateralTypes = poolConfig.requireCollateral 
+        ? poolConfig.acceptedCollaterals.map(c => c.toUpperCase())
+        : [];
+
+      await createPool({
+        name: poolConfig.name,
+        description: `Pool criada em ${new Date().toLocaleDateString('pt-BR')}`,
+        totalCapital: totalAmountValue,
+        maxLoansCount: poolConfig.loanCount,
+        criteria: {
+          minScore: poolConfig.minScore,
+          requiresCollateral: poolConfig.requireCollateral,
+          collateralTypes: collateralTypes,
+          minInterestRate: poolConfig.minReturn,
+          maxTermMonths: poolConfig.maxTerm,
+        },
+      });
+
+      toast.success(`Pool "${poolConfig.name}" criada com sucesso!`);
+      onComplete();
+    } catch (error: any) {
+      toast.error(error.message || 'Erro ao criar pool');
+      console.error('Erro ao criar pool:', error);
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const renderStep1 = () => (
@@ -180,17 +215,19 @@ export const PoolCreationFlow: React.FC<PoolCreationFlowProps> = ({
 
         <div>
           <Label className="text-white">Valor Total a Investir</Label>
-          <MaskedInput
-            mask="currency"
-            placeholder="R$ 0,00"
+          <Input
+            type="number"
+            step="1000"
+            min="0"
+            placeholder="Digite o valor em reais"
             value={poolConfig.totalAmount}
-            onChange={(value) => setPoolConfig(prev => ({ ...prev, totalAmount: value }))}
+            onChange={(e) => setPoolConfig(prev => ({ ...prev, totalAmount: e.target.value }))}
             className="bg-gray-800 border-gray-600 text-white mt-2"
           />
           {totalAmountValue > 0 && (
             <div className="mt-2 px-3 py-2 bg-blue-500/10 border border-blue-500/20 rounded-lg">
               <span className="text-sm text-blue-300">
-                ≈ {(totalAmountValue / 5.2).toLocaleString('pt-BR', { 
+                ≈ {(totalAmountValue / 5.15).toLocaleString('pt-BR', { 
                   style: 'currency', 
                   currency: 'USD',
                   minimumFractionDigits: 2,
@@ -198,7 +235,7 @@ export const PoolCreationFlow: React.FC<PoolCreationFlowProps> = ({
                 }).replace('US$', 'USDC')}
               </span>
               <span className="text-xs text-gray-400 ml-2">
-                (Taxa: R$ 5,20/USDC)
+                (1 USDC = R$ 5,15)
               </span>
             </div>
           )}
@@ -206,9 +243,14 @@ export const PoolCreationFlow: React.FC<PoolCreationFlowProps> = ({
             <span className={`text-sm ${totalAmountValue > 0 && totalAmountValue < 5000 ? 'text-red-400' : 'text-gray-400'}`}>
               Mínimo: R$ 5.000,00
             </span>
-            <span className="text-sm text-gray-400">
+            <span className="text-sm text-green-400 font-semibold">
               Disponível: {formatCurrency(availableBalance)}
             </span>
+          </div>
+          <div className="mt-2 px-3 py-2 bg-gray-700/30 border border-gray-600 rounded-lg">
+            <p className="text-xs text-gray-400">
+              💡 Seu saldo disponível pode incluir BRL e USDC convertido (taxa: R$ 5,15/USDC)
+            </p>
           </div>
           {totalAmountValue > 0 && totalAmountValue < 5000 && (
             <p className="text-red-400 text-sm mt-1">
@@ -242,11 +284,16 @@ export const PoolCreationFlow: React.FC<PoolCreationFlowProps> = ({
           
           {maxAmountPerLoan > 0 && (
             <Card className="bg-blue-500/10 border-blue-500/30 p-4 mt-4">
-              <div className="flex items-center gap-2">
-                <Target className="w-5 h-5 text-blue-400" />
-                <span className="text-blue-400 font-medium">
-                  Valor máximo por empréstimo: {formatCurrency(maxAmountPerLoan)}
-                </span>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Target className="w-5 h-5 text-blue-400" />
+                  <span className="text-blue-400 font-medium">
+                    Cada empréstimo será de: {formatCurrency(maxAmountPerLoan)}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-400 pl-7">
+                  O valor total ({formatCurrency(totalAmountValue)}) será dividido em {poolConfig.loanCount} empréstimos de até {formatCurrency(maxAmountPerLoan)} cada.
+                </p>
               </div>
             </Card>
           )}
@@ -648,10 +695,20 @@ export const PoolCreationFlow: React.FC<PoolCreationFlowProps> = ({
             ) : (
               <Button
                 onClick={handleActivatePool}
-                className="flex-1 bg-green-600 hover:bg-green-700"
+                disabled={isCreating || poolLoading}
+                className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-50"
               >
-                <CheckCircle className="w-4 h-4 mr-2" />
-                Ativar Pool
+                {isCreating || poolLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                    Criando Pool...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    Criar Pool
+                  </>
+                )}
               </Button>
             )}
           </div>
