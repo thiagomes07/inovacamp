@@ -169,24 +169,13 @@ export const usePool = (): UsePoolReturn => {
     setIsLoading(true);
 
     try {
-      // Buscar o investor_id correto do localStorage
-      const swapinUser = localStorage.getItem('swapin_user');
-      let investorId = user?.id;
-      
-      if (swapinUser) {
-        const userData = JSON.parse(swapinUser);
-        investorId = userData.id;
-        console.log('[usePool] User data:', userData);
-        console.log('[usePool] Using investor_id:', investorId);
-      }
-
-      if (!investorId) {
+      if (!user?.id) {
         throw new Error('Usuário não autenticado');
       }
 
       // Mapeia dados do frontend para backend (snake_case)
       const payload = {
-        investor_id: investorId,
+        investor_id: user.id,
         name: data.name,
         description: data.description,
         target_amount: data.totalCapital,
@@ -198,19 +187,14 @@ export const usePool = (): UsePoolReturn => {
         max_term_months: data.criteria.maxTermMonths,
       };
 
-      console.log('[usePool] Payload para criar pool:', payload);
-
       const response = await fetch(`${API_URL}/pool`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
-      console.log('[usePool] Response status:', response.status);
-
       if (!response.ok) {
         const error = await response.json();
-        console.error('[usePool] Erro do backend:', error);
         throw new Error(error.detail || 'Failed to create pool');
       }
       
