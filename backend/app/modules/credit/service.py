@@ -576,6 +576,241 @@ class CreditService:
             "count": len(compatible)
         }
     
+    def get_investment_opportunities(self) -> List[dict]:
+        """
+        Lista todas as oportunidades de investimento (credit requests pendentes).
+        
+        Returns:
+            Lista de oportunidades com dados do tomador
+        """
+        # Buscar credit requests com status PENDING
+        credit_requests = self.db.query(CreditRequest).filter(
+            CreditRequest.status == CreditRequestStatus.PENDING
+        ).all()
+        
+        opportunities = []
+        
+        for cr in credit_requests:
+            # Buscar dados do usuário
+            user = self.db.query(User).filter(User.user_id == cr.user_id).first()
+            if not user:
+                continue
+            
+            # Score está na tabela User - usar calculated_score ou credit_score como fallback
+            score = int(user.calculated_score if user.calculated_score is not None else user.credit_score or 0)
+            
+            opportunities.append({
+                "credit_request_id": cr.request_id,
+                "borrower_id": cr.user_id,
+                "borrower_name": user.full_name,
+                "borrower_email": user.email,
+                "amount": float(cr.amount_requested),
+                "duration_months": cr.duration_months,
+                "interest_rate": float(cr.interest_rate) if cr.interest_rate else None,
+                "score": score,
+                "collateral_type": cr.collateral_type.value if cr.collateral_type else None,
+                "collateral_description": cr.collateral_description,
+                "purpose": f"Solicitação de crédito - {cr.duration_months} meses",
+                "requested_at": cr.requested_at.isoformat() if cr.requested_at else None,
+                "risk_level": self._calculate_risk_level(score),
+                "monthly_payment_estimate": self._estimate_monthly_payment(
+                    float(cr.amount_requested),
+                    float(cr.interest_rate) if cr.interest_rate else 2.5,
+                    cr.duration_months
+                )
+            })
+        
+        return opportunities
+    
+    def _calculate_risk_level(self, score: int) -> str:
+        """Calcula nível de risco baseado no score."""
+        if score >= 700:
+            return "low"
+        elif score >= 500:
+            return "medium"
+        else:
+            return "high"
+    
+    def _estimate_monthly_payment(self, principal: float, annual_rate: float, months: int) -> float:
+        """Estima valor da parcela mensal usando Tabela Price."""
+        if annual_rate == 0:
+            return principal / months
+        
+        monthly_rate = annual_rate / 100 / 12
+        pmt = principal * (monthly_rate * (1 + monthly_rate) ** months) / ((1 + monthly_rate) ** months - 1)
+        return round(pmt, 2)
+    
+    def invest_in_credit_request(self, data: dict) -> dict:
+        """
+        Investidor financia diretamente uma solicitação de crédito.
+        
+        Args:
+            data: Dicionário contendo:
+                - investor_id: ID do investidor
+                - credit_request_id: ID da solicitação de crédito
+                - amount: Valor a investir
+                - interest_rate: Taxa de juros acordada
+        
+        Returns:
+            Detalhes do empréstimo criado
+        """
+        investor_id = data.get('investor_id')
+        credit_request_id = data.get('credit_request_id')
+        amount = data.get('amount')
+        interest_rate = data.get('interest_rate')
+        
+        # Validações
+        if not all([investor_id, credit_request_id, amount, interest_rate]):
+            raise HTTPException(
+                status_code=400,
+                detail="Campos obrigatórios: investor_id, credit_request_id, amount, interest_rate"
+            )
+        
+        # Buscar credit request
+        credit_request = self.repository.get_credit_request_by_id(credit_request_id)
+        if not credit_request:
+            raise HTTPException(
+                status_code=404,
+                detail="Solicitação de crédito não encontrada"
+            )
+        
+        # Verificar se já não foi aprovado
+        if credit_request.status == CreditRequestStatus.APPROVED:
+            raise HTTPException(
+                status_code=400,
+                detail="Esta solicitação já foi aprovada"
+            )
+        
+        user_id = credit_request.user_id
+        
+        # Buscar usuário tomador
+        user = self.db.query(User).filter(User.user_id == user_id).first()
+        if not user:
+            raise HTTPException(
+                status_code=404,
+                detail="Usuário tomador não encontrado"
+            )
+        
+        # Buscar investidor
+        from app.models.models import Investor
+        investor = self.db.query(Investor).filter(Investor.investor_id == investor_id).first()
+        if not investor:
+            raise HTTPException(
+                status_code=404,
+                detail="Investidor não encontrado"
+            )
+        
+        # Buscar carteiras BRL
+        investor_wallets = self.wallet_repository.get_wallet_by_owner(investor_id, 'INVESTOR')
+        investor_wallet = next((w for w in investor_wallets if w.currency == 'BRL'), None)
+        
+        if not investor_wallet:
+            raise HTTPException(
+                status_code=404,
+                detail="Carteira BRL do investidor não encontrada"
+            )
+        
+        # Validar saldo do investidor
+        if float(investor_wallet.balance) < amount:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Saldo insuficiente. Disponível: R$ {float(investor_wallet.balance):.2f}"
+            )
+        
+        # Buscar ou criar carteira do tomador
+        user_wallets = self.wallet_repository.get_wallet_by_owner(user_id, 'USER')
+        user_wallet = next((w for w in user_wallets if w.currency == 'BRL'), None)
+        
+        if not user_wallet:
+            from app.models.models import Wallet
+            user_wallet = Wallet(
+                wallet_id=str(uuid.uuid4()),
+                owner_id=user_id,
+                owner_type=OwnerType.USER,
+                currency=Currency.BRL,
+                balance=0,
+                blocked=0
+            )
+            self.db.add(user_wallet)
+            self.db.flush()
+        
+        try:
+            # 1. Debitar do investidor
+            new_investor_balance = float(investor_wallet.balance) - amount
+            self.wallet_repository.update_balance(investor_wallet.wallet_id, new_investor_balance)
+            
+            # 2. Creditar no tomador
+            new_user_balance = float(user_wallet.balance) + amount
+            self.wallet_repository.update_balance(user_wallet.wallet_id, new_user_balance)
+            
+            # 3. Criar Loan
+            loan_id = str(uuid.uuid4())
+            loan = Loan(
+                loan_id=loan_id,
+                credit_request_id=credit_request_id,
+                user_id=user_id,
+                investor_id=investor_id,
+                pool_id=None,
+                principal=amount,
+                interest_rate=interest_rate,
+                duration_months=credit_request.duration_months,
+                status=LoanStatus.ACTIVE
+            )
+            self.db.add(loan)
+            
+            # 4. Criar transação
+            transaction = Transaction(
+                transaction_id=str(uuid.uuid4()),
+                sender_id=investor_id,
+                sender_type=OwnerType.INVESTOR,
+                receiver_id=user_id,
+                receiver_type=OwnerType.USER,
+                wallet_id=user_wallet.wallet_id,
+                amount=amount,
+                currency=Currency.BRL,
+                type=TransactionType.INVESTMENT,
+                status=TransactionStatus.COMPLETED,
+                description=f"Investimento direto de {investor.full_name} para {user.full_name}",
+                created_at=datetime.now()
+            )
+            self.db.add(transaction)
+            
+            # 5. Gerar parcelas
+            self._create_loan_payments(loan)
+            
+            # 6. Atualizar credit request
+            credit_request.status = CreditRequestStatus.APPROVED
+            credit_request.investor_id = investor_id
+            credit_request.interest_rate = interest_rate
+            credit_request.approved_at = datetime.now()
+            credit_request.updated_at = datetime.now()
+            
+            self.db.commit()
+            
+            logger.info(f"[Investimento Direto] {investor.full_name} investiu R$ {amount:.2f} em {user.full_name}")
+            
+            return {
+                "loan_id": loan_id,
+                "credit_request_id": credit_request_id,
+                "investor_id": investor_id,
+                "investor_name": investor.full_name,
+                "borrower_id": user_id,
+                "borrower_name": user.full_name,
+                "amount": amount,
+                "interest_rate": interest_rate,
+                "duration_months": credit_request.duration_months,
+                "transaction_id": transaction.transaction_id,
+                "created_at": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"[Investimento Direto] Erro: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Erro ao processar investimento: {str(e)}"
+            )
+    
     def _to_dict(self, entity: Any) -> dict:
         """Converte entidade para dicionário."""
         return {

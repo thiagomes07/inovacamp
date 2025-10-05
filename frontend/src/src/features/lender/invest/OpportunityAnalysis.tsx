@@ -88,19 +88,57 @@ export const OpportunityAnalysis: React.FC<OpportunityAnalysisProps> = ({
 
     setIsProcessing(true);
 
-    // Simulate facial verification for high amounts
-    if (amount > 1000) {
-      toast.info('Verificação facial necessária para valores acima de $1.000');
-      // Simulate verification delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+      // Get investor ID from localStorage
+      const swapinUser = localStorage.getItem('swapin_user');
+      if (!swapinUser) {
+        throw new Error('Usuário não encontrado. Faça login novamente.');
+      }
+
+      const userData = JSON.parse(swapinUser);
+      const investorId = userData.id;
+
+      if (!investorId) {
+        throw new Error('ID do investidor não encontrado.');
+      }
+
+      // Simulate facial verification for high amounts
+      if (amount > 5000) {
+        toast.info('Verificação facial necessária para valores acima de R$ 5.000');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+
+      // Call API to invest
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/credit/invest`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          investor_id: investorId,
+          credit_request_id: opportunity.credit_request_id,
+          amount: amount,
+          interest_rate: opportunity.interest_rate || 2.5
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Erro ao processar investimento');
+      }
+
+      const result = await response.json();
+      console.log('Investimento realizado:', result);
+
+      onInvest(amount);
+      toast.success(`Investimento de R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} realizado com sucesso!`);
+      
+    } catch (err: any) {
+      console.error('Erro ao investir:', err);
+      toast.error(err.message || 'Erro ao processar investimento. Tente novamente.');
+    } finally {
+      setIsProcessing(false);
     }
-
-    // Simulate blockchain processing
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
-    onInvest(amount);
-    toast.success(`Investimento de $${amount.toLocaleString('en-US', { minimumFractionDigits: 2 })} USDC realizado com sucesso!`);
-    setIsProcessing(false);
   };
 
   const getRiskColor = (risk: string) => {
@@ -144,13 +182,13 @@ export const OpportunityAnalysis: React.FC<OpportunityAnalysisProps> = ({
             <div className="text-center space-y-6">
               <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center mx-auto">
                 <span className="text-white text-xl font-bold">
-                  {opportunity.borrower.charAt(0)}
+                  {(opportunity.borrower_name || opportunity.borrower || 'U').charAt(0)}
                 </span>
               </div>
 
               <div>
                 <h3 className="text-xl font-bold text-white mb-2">
-                  {opportunity.borrower}
+                  {opportunity.borrower_name || opportunity.borrower}
                 </h3>
                 <p className="text-gray-400">{opportunity.purpose}</p>
               </div>
@@ -164,16 +202,16 @@ export const OpportunityAnalysis: React.FC<OpportunityAnalysisProps> = ({
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Taxa de retorno:</span>
-                  <span className="text-green-400 font-semibold">{opportunity.rate}% a.a.</span>
+                  <span className="text-green-400 font-semibold">{opportunity.interest_rate || opportunity.rate}% a.a.</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Prazo:</span>
-                  <span className="text-white font-semibold">{opportunity.term} meses</span>
+                  <span className="text-white font-semibold">{opportunity.duration_months || opportunity.term} meses</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Retorno estimado:</span>
                   <span className="text-green-400 font-semibold">
-                    ${(getNumericValue(investAmount) * (1 + opportunity.rate / 100)).toLocaleString('en-US', { minimumFractionDigits: 2 })} USDC
+                    ${(getNumericValue(investAmount) * (1 + (opportunity.interest_rate || opportunity.rate) / 100)).toLocaleString('en-US', { minimumFractionDigits: 2 })} USDC
                   </span>
                 </div>
               </div>
@@ -231,16 +269,16 @@ export const OpportunityAnalysis: React.FC<OpportunityAnalysisProps> = ({
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
                 <span className="text-white font-bold text-lg">
-                  {opportunity.borrower.charAt(0)}
+                  {(opportunity.borrower_name || opportunity.borrower || 'U').charAt(0)}
                 </span>
               </div>
               <div>
-                <h2 className="text-xl font-bold text-white">{opportunity.borrower}</h2>
+                <h2 className="text-xl font-bold text-white">{opportunity.borrower_name || opportunity.borrower}</h2>
                 <p className="text-gray-400">{opportunity.purpose}</p>
               </div>
             </div>
-            <Badge className={getRiskColor(opportunity.riskLevel)}>
-              {getRiskLabel(opportunity.riskLevel)}
+            <Badge className={getRiskColor(opportunity.risk_level || opportunity.riskLevel)}>
+              {getRiskLabel(opportunity.risk_level || opportunity.riskLevel)}
             </Badge>
           </div>
 
@@ -253,11 +291,11 @@ export const OpportunityAnalysis: React.FC<OpportunityAnalysisProps> = ({
             </div>
             <div className="text-center">
               <p className="text-gray-400 text-sm">Taxa</p>
-              <p className="text-green-400 font-bold text-lg">{opportunity.rate}% a.a.</p>
+              <p className="text-green-400 font-bold text-lg">{opportunity.interest_rate || opportunity.rate}% a.a.</p>
             </div>
             <div className="text-center">
               <p className="text-gray-400 text-sm">Prazo</p>
-              <p className="text-white font-bold text-lg">{opportunity.term} meses</p>
+              <p className="text-white font-bold text-lg">{opportunity.duration_months || opportunity.term} meses</p>
             </div>
             <div className="text-center">
               <p className="text-gray-400 text-sm">Score</p>
@@ -321,14 +359,14 @@ export const OpportunityAnalysis: React.FC<OpportunityAnalysisProps> = ({
                 <div className="flex justify-between">
                   <span className="text-gray-400">Valor da parcela:</span>
                   <span className="text-white">
-                    R$ {(opportunity.amount * (1 + opportunity.rate / 100) / opportunity.term).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    R$ {opportunity.monthly_payment_estimate ? opportunity.monthly_payment_estimate.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : (opportunity.amount * (1 + (opportunity.interest_rate || opportunity.rate) / 100) / (opportunity.duration_months || opportunity.term)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
 
                 <div className="flex justify-between">
                   <span className="text-gray-400">Total a receber:</span>
                   <span className="text-green-400 font-semibold">
-                    R$ {(opportunity.amount * (1 + opportunity.rate / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    R$ {(opportunity.amount * (1 + (opportunity.interest_rate || opportunity.rate) / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
               </div>
@@ -465,11 +503,10 @@ export const OpportunityAnalysis: React.FC<OpportunityAnalysisProps> = ({
               <label className="block text-sm font-medium text-gray-400 mb-2">
                 Valor a investir (USDC)
               </label>
-              <MaskedInput
-                mask="usd"
+              <Input
                 placeholder="$ 0.00"
                 value={investAmount}
-                onChange={setInvestAmount}
+                onChange={(e) => setInvestAmount(e.target.value)}
                 className="bg-gray-800/50 border-gray-600 text-white"
               />
               <p className="text-gray-400 text-sm mt-1">
@@ -482,13 +519,13 @@ export const OpportunityAnalysis: React.FC<OpportunityAnalysisProps> = ({
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-400">Retorno estimado:</span>
                   <span className="text-green-400">
-                    ${(getNumericValue(investAmount) * (1 + opportunity.rate / 100)).toLocaleString('en-US', { minimumFractionDigits: 2 })} USDC
+                    ${(getNumericValue(investAmount) * (1 + (opportunity.interest_rate || opportunity.rate) / 100)).toLocaleString('en-US', { minimumFractionDigits: 2 })} USDC
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-400">Lucro líquido:</span>
                   <span className="text-green-400">
-                    ${(getNumericValue(investAmount) * (opportunity.rate / 100)).toLocaleString('en-US', { minimumFractionDigits: 2 })} USDC
+                    ${(getNumericValue(investAmount) * ((opportunity.interest_rate || opportunity.rate) / 100)).toLocaleString('en-US', { minimumFractionDigits: 2 })} USDC
                   </span>
                 </div>
               </div>

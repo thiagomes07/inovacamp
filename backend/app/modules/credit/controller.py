@@ -52,6 +52,26 @@ def create_credit_request(
     }
 
 
+# ROTAS ESPECÍFICAS DEVEM VIR ANTES DAS ROTAS PARAMETRIZADAS
+# Exemplo: /opportunities ANTES de /{request_id}
+
+@router.get("/opportunities")
+def get_investment_opportunities(
+    db: Session = Depends(get_db)
+):
+    """
+    Lista todas as oportunidades de investimento (credit requests PENDING).
+    
+    **Retorna:**
+    - Lista de solicitações de crédito pendentes
+    - Para cada uma: dados do tomador, valor, prazo, garantia, score
+    """
+    service = CreditService(db)
+    result = service.get_investment_opportunities()
+    
+    return result
+
+
 @router.get("/{request_id}")
 def get_credit_request(
     request_id: str,
@@ -141,3 +161,42 @@ def get_compatible_pools(
     result = service.get_compatible_pools(user_id, amount, duration_months)
     
     return result
+
+
+@router.post("/invest", status_code=status.HTTP_201_CREATED)
+def invest_in_credit_request(
+    data: Dict[str, Any] = Body(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Investidor financia diretamente uma solicitação de crédito.
+    
+    **Body JSON:**
+    ```json
+    {
+        "investor_id": "i1000000-0000-0000-0000-000000000001",
+        "credit_request_id": "cr123...",
+        "amount": 5000.00,
+        "interest_rate": 2.5
+    }
+    ```
+    
+    **Fluxo:**
+    1. Valida saldo do investidor
+    2. Debita da carteira do investidor
+    3. Credita na carteira do tomador
+    4. Cria registro do Loan
+    5. Gera parcelas de pagamento
+    6. Atualiza status do CreditRequest para APPROVED
+    
+    **Retorna:**
+    - Detalhes do empréstimo criado
+    - ID da transação
+    """
+    service = CreditService(db)
+    result = service.invest_in_credit_request(data)
+    
+    return {
+        "message": "Investimento realizado com sucesso!",
+        "data": result
+    }

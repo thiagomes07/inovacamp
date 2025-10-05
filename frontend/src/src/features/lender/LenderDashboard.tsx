@@ -59,6 +59,8 @@ export const LenderDashboard: React.FC = () => {
   const [selectedOpportunity, setSelectedOpportunity] = useState<any>(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [realOpportunities, setRealOpportunities] = useState<any[]>([]);
+  const [isLoadingOpportunities, setIsLoadingOpportunities] = useState(false);
 
   const [investAmount, setInvestAmount] = useState('');
   
@@ -81,6 +83,33 @@ export const LenderDashboard: React.FC = () => {
       refreshBalance();
     }
   }, [currentView]);
+  
+  // Buscar oportunidades reais quando entrar na tela de opportunities
+  useEffect(() => {
+    if (currentView === 'opportunities') {
+      fetchRealOpportunities();
+    }
+  }, [currentView]);
+  
+  const fetchRealOpportunities = async () => {
+    setIsLoadingOpportunities(true);
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/credit/opportunities');
+      if (response.ok) {
+        const data = await response.json();
+        setRealOpportunities(data);
+        console.log('[LenderDashboard] Oportunidades carregadas:', data);
+      } else {
+        console.error('[LenderDashboard] Erro ao buscar oportunidades:', response.status);
+        toast.error('Erro ao carregar oportunidades');
+      }
+    } catch (err) {
+      console.error('[LenderDashboard] Erro ao buscar oportunidades:', err);
+      toast.error('Erro ao conectar com servidor');
+    } finally {
+      setIsLoadingOpportunities(false);
+    }
+  };
   
   // Handler para refresh manual
   const handleRefresh = async () => {
@@ -106,8 +135,11 @@ export const LenderDashboard: React.FC = () => {
   const investedBRL = investedBalance.brl;
 
   // Filter opportunities based on selected filters
-  const filteredOpportunities = opportunities.filter(opportunity => {
-    const matchesRisk = !riskFilter || opportunity.riskLevel === riskFilter;
+  // Usar oportunidades reais da API se disponíveis, senão usar mock do portfolio
+  const opportunitiesToShow = realOpportunities.length > 0 ? realOpportunities : opportunities;
+  
+  const filteredOpportunities = opportunitiesToShow.filter((opportunity: any) => {
+    const matchesRisk = !riskFilter || opportunity.risk_level === riskFilter;
     return matchesRisk;
   });
 
@@ -182,7 +214,7 @@ export const LenderDashboard: React.FC = () => {
           opportunity={selectedOpportunity}
           onBack={() => setCurrentView('opportunities')}
           onInvest={(amount) => {
-            toast.success(`Investimento de ${amount.toLocaleString('en-US', { minimumFractionDigits: 2 })} USDC realizado em ${selectedOpportunity.borrower}!`);
+            toast.success(`Investimento de R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} realizado em ${selectedOpportunity.borrower_name || selectedOpportunity.borrower}!`);
             setCurrentView('main');
           }}
           availableBalance={availableBalance.usdc}
@@ -285,30 +317,30 @@ export const LenderDashboard: React.FC = () => {
           {/* Opportunities List */}
           <div className="space-y-4">
             {filteredOpportunities.map((opportunity) => (
-              <Card key={opportunity.id} className="backdrop-blur-md bg-white/10 border-white/20 p-6">
+              <Card key={opportunity.credit_request_id || opportunity.id} className="backdrop-blur-md bg-white/10 border-white/20 p-6">
                 <div className="flex justify-between items-start mb-4">
                   <div>
                     <div className="flex items-center gap-3 mb-2">
                       <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
                         <span className="text-white font-semibold">
-                          {opportunity.borrower.charAt(0)}
+                          {(opportunity.borrower_name || opportunity.borrower || 'U').charAt(0)}
                         </span>
                       </div>
                       <div>
-                        <h3 className="text-white font-semibold">{opportunity.borrower}</h3>
+                        <h3 className="text-white font-semibold">{opportunity.borrower_name || opportunity.borrower}</h3>
                         <p className="text-gray-400 text-sm">{opportunity.purpose}</p>
                       </div>
                     </div>
                   </div>
                   <Badge 
                     className={
-                      opportunity.riskLevel === 'low' ? 'bg-green-500/20 text-green-400' :
-                      opportunity.riskLevel === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                      opportunity.risk_level === 'low' ? 'bg-green-500/20 text-green-400' :
+                      opportunity.risk_level === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
                       'bg-red-500/20 text-red-400'
                     }
                   >
-                    {opportunity.riskLevel === 'low' ? 'Baixo Risco' :
-                     opportunity.riskLevel === 'medium' ? 'Médio Risco' : 'Alto Risco'}
+                    {opportunity.risk_level === 'low' ? 'Baixo Risco' :
+                     opportunity.risk_level === 'medium' ? 'Médio Risco' : 'Alto Risco'}
                   </Badge>
                 </div>
 
@@ -321,15 +353,15 @@ export const LenderDashboard: React.FC = () => {
                   </div>
                   <div>
                     <p className="text-gray-400 text-sm">Taxa</p>
-                    <p className="text-green-400 font-semibold">{opportunity.rate}% a.a.</p>
+                    <p className="text-green-400 font-semibold">{(opportunity.interest_rate || opportunity.rate || 0)}% a.a.</p>
                   </div>
                   <div>
                     <p className="text-gray-400 text-sm">Prazo</p>
-                    <p className="text-white font-semibold">{opportunity.term} meses</p>
+                    <p className="text-white font-semibold">{(opportunity.duration_months || opportunity.term || 0)} meses</p>
                   </div>
                   <div>
                     <p className="text-gray-400 text-sm">Score</p>
-                    <p className="text-blue-400 font-semibold">{opportunity.score}</p>
+                    <p className="text-blue-400 font-semibold">{opportunity.score || 0}</p>
                   </div>
                 </div>
 

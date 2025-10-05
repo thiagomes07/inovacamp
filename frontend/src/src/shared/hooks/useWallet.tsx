@@ -203,11 +203,11 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({
       const formattedTransactions: WalletTransaction[] = txData.map(
         (tx: any) => ({
           id: tx.transaction_id,
-          type: tx.transaction_type.toLowerCase() as any,
+          type: (tx.transaction_type || tx.type || 'unknown').toLowerCase() as any,
           amount: tx.amount,
           currency: tx.currency?.toLowerCase() || "brl",
           date: tx.created_at,
-          status: tx.status.toLowerCase() as any,
+          status: (tx.status || 'pending').toLowerCase() as any,
           description: tx.description || "Transação",
           hash: tx.blockchain_hash,
         })
