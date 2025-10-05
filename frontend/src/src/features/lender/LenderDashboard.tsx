@@ -35,7 +35,7 @@ type DashboardView = 'main' | 'deposit' | 'withdraw' | 'invest' | 'create-pool' 
 
 export const LenderDashboard: React.FC = () => {
   const { user, logout } = useAuth();
-  const { balance: walletBalance, availableBalance, investedBalance, getTotalBalanceInBRL } = useWallet();
+  const { balance: walletBalance, availableBalance, investedBalance, getTotalBalanceInBRL, refreshBalance } = useWallet();
   
   // TODO: Substituir por ID do contexto do usuário quando implementado
   const INVESTOR_ID = 'i1000000-0000-0000-0000-000000000001'; // Carlos Investidor - investor com dados de teste
@@ -62,10 +62,23 @@ export const LenderDashboard: React.FC = () => {
 
   const [investAmount, setInvestAmount] = useState('');
   
+  // Carregar saldo ao montar o componente
+  useEffect(() => {
+    refreshBalance();
+  }, []);
+  
   // Recarregar dados quando voltar para a view principal
   useEffect(() => {
     if (currentView === 'main' && !portfolioLoading) {
       refreshPortfolio();
+      refreshBalance(); // Atualizar saldo também
+    }
+  }, [currentView]);
+  
+  // Atualizar saldo quando entrar na tela de withdraw
+  useEffect(() => {
+    if (currentView === 'withdraw') {
+      refreshBalance();
     }
   }, [currentView]);
   
@@ -84,11 +97,13 @@ export const LenderDashboard: React.FC = () => {
     }
   };
 
-  // Calcular totais (usar dados do portfólio ou fallback para wallet)
-  const totalUSDC = balance.total > 0 ? balance.total : (availableBalance.usdc + investedBalance.usdc);
-  const totalBRL = totalUSDC * 5.015; // Mock exchange rate
-  const availableUSDC = balance.available > 0 ? balance.available : availableBalance.usdc;
-  const investedUSDC = balance.invested > 0 ? balance.invested : investedBalance.usdc;
+  // Calcular totais (usar saldo real da carteira)
+  const totalBRL = availableBalance.brl + investedBalance.brl;
+  const totalUSDC = availableBalance.usdc + investedBalance.usdc;
+  const availableUSDC = availableBalance.usdc;
+  const investedUSDC = investedBalance.usdc;
+  const availableBRL = availableBalance.brl;
+  const investedBRL = investedBalance.brl;
 
   // Filter opportunities based on selected filters
   const filteredOpportunities = opportunities.filter(opportunity => {
@@ -491,10 +506,10 @@ export const LenderDashboard: React.FC = () => {
             <div className="space-y-4">
               <div>
                 <p className="text-3xl font-bold text-white">
-                  {totalUSDC.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} USDC
+                  R$ {totalBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
                 <p className="text-gray-300 text-lg">
-                  ≈ R$ {totalBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  {totalUSDC.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} USDC
                 </p>
               </div>
               
@@ -502,13 +517,19 @@ export const LenderDashboard: React.FC = () => {
                 <div>
                   <p className="text-gray-400">Disponível</p>
                   <p className="text-green-400 font-semibold">
-                    {portfolioLoading ? '...' : availableUSDC.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} USDC
+                    R$ {availableBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-gray-400 text-xs">
+                    {availableUSDC.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} USDC
                   </p>
                 </div>
                 <div>
                   <p className="text-gray-400">Investido</p>
                   <p className="text-blue-400 font-semibold">
-                    {portfolioLoading ? '...' : investedUSDC.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} USDC
+                    R$ {investedBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-gray-400 text-xs">
+                    {investedUSDC.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} USDC
                   </p>
                 </div>
               </div>

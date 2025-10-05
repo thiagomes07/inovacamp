@@ -345,8 +345,7 @@ export const WithdrawFlow: React.FC<WithdrawFlowProps> = ({
 
     if (amountCurrency === "BRL") {
       if (numAmount < method.minAmount.brl) return false;
-      const usdcAmount = numAmount / exchangeRate;
-      return usdcAmount <= availableBalance.usdc;
+      return numAmount <= availableBalance.brl;
     } else {
       if (numAmount < method.minAmount.usdc) return false;
       return numAmount <= availableBalance.usdc;
@@ -398,51 +397,60 @@ export const WithdrawFlow: React.FC<WithdrawFlowProps> = ({
         throw new Error("ID do usuário não encontrado.");
       }
 
-      // Prepare request body based on selected method
-      let requestBody: any = {
-        userId: userId,
-        profileType: profileType,
-        amount: parseNumericValue(amount, amountCurrency),
-        currency: amountCurrency,
-        method: selectedMethod,
-      };
-
-      // Add method-specific data
+      // Sempre usa /pix/send para qualquer transferência PIX
+      let apiEndpoint: string;
+      let requestBody: any;
+      
       if (selectedMethod === "pix") {
+        // Usa /pix/send para qualquer PIX (interno ou externo)
+        apiEndpoint = `${import.meta.env.VITE_API_BASE_URL}/pix/send`;
         requestBody = {
-          ...requestBody,
-          pixKey: pixData.key,
-          pixKeyType: pixData.keyType,
+          userId: userId,
+          pixCode: pixData.key, // Pode ser ID de usuário (QR Code) ou chave PIX externa
+          amount: parseNumericValue(amount, amountCurrency),
         };
       } else if (selectedMethod === "bank-transfer") {
+        apiEndpoint = `${import.meta.env.VITE_API_BASE_URL}/bank/transfer`;
         requestBody = {
-          ...requestBody,
+          userId: userId,
+          profileType: profileType,
+          amount: parseNumericValue(amount, amountCurrency),
+          currency: amountCurrency,
+          method: selectedMethod,
           bankData: bankData,
         };
       } else if (selectedMethod === "stablecoin") {
+        apiEndpoint = `${import.meta.env.VITE_API_BASE_URL}/stablecoin/transfer`;
         requestBody = {
-          ...requestBody,
+          userId: userId,
+          profileType: profileType,
+          amount: parseNumericValue(amount, amountCurrency),
+          currency: amountCurrency,
+          method: selectedMethod,
           walletAddress: stablecoinData.address,
           network: stablecoinData.network,
         };
       } else if (selectedMethod === "wire-transfer") {
+        apiEndpoint = `${import.meta.env.VITE_API_BASE_URL}/wire/transfer`;
         requestBody = {
-          ...requestBody,
+          userId: userId,
+          profileType: profileType,
+          amount: parseNumericValue(amount, amountCurrency),
+          currency: amountCurrency,
+          method: selectedMethod,
           wireData: wireData,
         };
+      } else {
+        throw new Error("Método de saque não suportado");
       }
-
-      // Make API call
-      const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL}/pix/send`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(requestBody),
-        }
-      );
+      
+      const response = await fetch(apiEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -504,17 +512,16 @@ export const WithdrawFlow: React.FC<WithdrawFlowProps> = ({
                 Saldo disponível para resgate
               </p>
               <p className="text-3xl font-bold text-white mb-1">
+                R${" "}
+                {availableBalance.brl.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                })}
+              </p>
+              <p className="text-gray-400 text-sm">
                 {availableBalance.usdc.toLocaleString("pt-BR", {
                   minimumFractionDigits: 2,
                 })}{" "}
                 USDC
-              </p>
-              <p className="text-gray-400 text-sm">
-                ≈ R${" "}
-                {(availableBalance.usdc * exchangeRate).toLocaleString(
-                  "pt-BR",
-                  { minimumFractionDigits: 2 }
-                )}
               </p>
             </div>
           </Card>
