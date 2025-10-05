@@ -199,6 +199,33 @@ SELECT * FROM (
 ) AS tmp
 WHERE @investor_count = 0;
 
+-- Carteiras BRL para investidores
+INSERT INTO wallets (wallet_id, owner_id, owner_type, currency, balance, blocked, wallet_address)
+SELECT * FROM (
+    SELECT 
+        'w1000000-0000-0000-0000-000000000011' AS wallet_id,
+        'i1000000-0000-0000-0000-000000000001' AS owner_id,
+        'INVESTOR' AS owner_type,
+        'BRL' AS currency,
+        2575000.00 AS balance,
+        0.00 AS blocked,
+        NULL AS wallet_address
+) AS tmp
+WHERE @investor_count = 0;
+
+INSERT INTO wallets (wallet_id, owner_id, owner_type, currency, balance, blocked, wallet_address)
+SELECT * FROM (
+    SELECT 
+        'w1000000-0000-0000-0000-000000000012' AS wallet_id,
+        'i1000000-0000-0000-0000-000000000002' AS owner_id,
+        'INVESTOR' AS owner_type,
+        'BRL' AS currency,
+        257500.00 AS balance,
+        0.00 AS blocked,
+        NULL AS wallet_address
+) AS tmp
+WHERE @investor_count = 0;
+
 -- CREDIT_REQUESTS (SolicitaÃ§Ãµes de CrÃ©dito)
 INSERT INTO credit_requests (request_id, user_id, investor_id, amount_requested, duration_months, interest_rate, status, collateral_type, collateral_description, collateral_docs)
 SELECT * FROM (

@@ -169,23 +169,65 @@ export const usePool = (): UsePoolReturn => {
     setIsLoading(true);
 
     try {
+      // Buscar o investor_id correto do localStorage
+      const swapinUser = localStorage.getItem('swapin_user');
+      let investorId = user?.id;
+      
+      if (swapinUser) {
+        const userData = JSON.parse(swapinUser);
+        investorId = userData.id;
+        console.log('[usePool] User data:', userData);
+        console.log('[usePool] Using investor_id:', investorId);
+      }
+
+      if (!investorId) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      // Mapeia dados do frontend para backend (snake_case)
+      const payload = {
+        investor_id: investorId,
+        name: data.name,
+        description: data.description,
+        target_amount: data.totalCapital,
+        duration_months: data.criteria.maxTermMonths || 24,
+        expected_return: 0, // Será calculado baseado nos empréstimos
+        min_score: data.criteria.minScore,
+        requires_collateral: data.criteria.requiresCollateral,
+        min_interest_rate: data.criteria.minInterestRate,
+        max_term_months: data.criteria.maxTermMonths,
+      };
+
+      console.log('[usePool] Payload para criar pool:', payload);
+
       const response = await fetch(`${API_URL}/pool`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+        body: JSON.stringify(payload)
       });
 
-      if (!response.ok) throw new Error('Failed to create pool');
+      console.log('[usePool] Response status:', response.status);
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('[usePool] Erro do backend:', error);
+        throw new Error(error.detail || 'Failed to create pool');
+      }
       
-      const result = await response.json();
-      const newPool = result.data;
+      const newPool = await response.json();
       
-      setPools(prev => [newPool, ...prev]);
+      // TODO: Implementar débito da carteira considerando conversão USDC→BRL (taxa 5.15)
+      // O backend deve debitar primeiro do saldo BRL, e se não for suficiente,
+      // converter USDC para BRL na proporção necessária
+      
+      // Atualiza lista de pools
+      await fetchPools();
+      
       return newPool;
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [user?.id, fetchPools]);
 
   const updatePool = useCallback(async (poolId: string, updates: Partial<Pool>) => {
     setIsLoading(true);

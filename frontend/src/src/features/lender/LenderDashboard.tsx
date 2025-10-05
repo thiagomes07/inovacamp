@@ -35,7 +35,7 @@ type DashboardView = 'main' | 'deposit' | 'withdraw' | 'invest' | 'create-pool' 
 
 export const LenderDashboard: React.FC = () => {
   const { user, logout } = useAuth();
-  const { balance: walletBalance, availableBalance, investedBalance } = useWallet();
+  const { balance: walletBalance, availableBalance, investedBalance, getTotalBalanceInBRL } = useWallet();
   
   // TODO: Substituir por ID do contexto do usuário quando implementado
   const INVESTOR_ID = 'i1000000-0000-0000-0000-000000000001'; // Carlos Investidor - investor com dados de teste
@@ -189,7 +189,7 @@ export const LenderDashboard: React.FC = () => {
         <PoolCreationFlow
           onBack={() => setCurrentView('main')}
           onComplete={() => setCurrentView('main')}
-          availableBalance={availableBalance.brl}
+          availableBalance={getTotalBalanceInBRL()}
         />
         
         {/* Bottom Navigation */}

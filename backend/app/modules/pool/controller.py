@@ -14,13 +14,25 @@ def create_pool(
     db: Session = Depends(get_db)
 ):
     """
-    Cria novo pool de investimento.
+    Cria novo pool de investimento e debita o valor da carteira do investidor.
     
-    **Ainda não implementado - Placeholder**
+    Campos obrigatórios:
+    - investor_id: ID do investidor
+    - name: Nome da pool
+    - target_amount: Capital inicial (mínimo R$ 1.000)
+    - duration_months: Duração em meses
+    
+    Campos opcionais:
+    - expected_return: Taxa de retorno esperada (% a.a.)
+    - risk_profile: LOW, MEDIUM, HIGH (padrão: MEDIUM)
+    - min_score: Score mínimo exigido (padrão: 700)
+    - requires_collateral: Se exige garantia (padrão: false)
+    - min_interest_rate: Taxa mínima aceita (padrão: 0)
+    - max_term_months: Prazo máximo aceito (padrão: 24)
     """
     service = PoolService(db)
     result = service.create_pool(data)
-    return {"message": "Pool created", "data": result}
+    return result
 
 
 @router.get("/")

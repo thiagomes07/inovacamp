@@ -31,7 +31,10 @@ interface WalletContextType {
   withdraw: (amount: number, currency: keyof WalletBalance, method: string, destination: string) => Promise<void>;
   swap: (fromCurrency: keyof WalletBalance, toCurrency: keyof WalletBalance, amount: number) => Promise<void>;
   refreshBalance: () => Promise<void>;
+  getTotalBalanceInBRL: () => number;
 }
+
+const USDC_TO_BRL_RATE = 5.15;
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
@@ -304,6 +307,10 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     await fetchTransactions();
   };
 
+  const getTotalBalanceInBRL = (): number => {
+    return balance.brl + (balance.usdc * USDC_TO_BRL_RATE);
+  };
+
   return (
     <WalletContext.Provider value={{
       balance,
@@ -314,7 +321,8 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       deposit,
       withdraw,
       swap,
-      refreshBalance
+      refreshBalance,
+      getTotalBalanceInBRL
     }}>
       {children}
     </WalletContext.Provider>
