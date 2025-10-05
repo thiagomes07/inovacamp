@@ -14,16 +14,41 @@ def create_credit_request(
     db: Session = Depends(get_db)
 ):
     """
-    Cria nova solicitação de crédito.
+    Cria nova solicitação de crédito com matching automático de pools.
     
-    **Ainda não implementado - Placeholder**
+    **Body JSON:**
+    ```json
+    {
+        "user_id": "u1000000-0000-0000-0000-000000000001",
+        "amount_requested": 5000.00,
+        "duration_months": 12,
+        "interest_rate": 2.5,
+        "approval_type": "automatic",  // "automatic", "manual" ou "both"
+        "collateral_type": "VEHICLE",  // Opcional
+        "collateral_description": "Honda Civic 2019",  // Opcional
+        "collateral_docs": ["url1", "url2"]  // Opcional
+    }
+    ```
+    
+    **Approval Types:**
+    - `automatic`: Tenta match automático com pools. Se não houver, rejeita.
+    - `manual`: Vai direto para marketplace manual (não implementado ainda)
+    - `both`: Tenta automático primeiro, se não houver match vai para manual
+    
+    **Retorna:**
+    - Status da solicitação (PENDING, APPROVED ou REJECTED)
+    - Se aprovado automaticamente, o crédito é imediatamente liberado na carteira
     """
     service = CreditService(db)
     result = service.create_credit_request(data)
     
+    # O status vem como string em minúsculas do enum
+    is_approved = result.get('status', '').upper() == 'APPROVED'
+    
     return {
-        "message": "Credit request created successfully",
-        "data": result
+        "message": "Crédito aprovado e liberado na carteira!" if is_approved else "Solicitação criada com sucesso",
+        "data": result,
+        "approved": is_approved
     }
 
 
@@ -90,5 +115,29 @@ def get_approved_credit(
     """
     service = CreditService(db)
     result = service.get_approved_credit(user_id)
+    
+    return result
+
+
+@router.get("/compatible-pools/{user_id}")
+def get_compatible_pools(
+    user_id: str,
+    amount: float,
+    duration_months: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna pools compatíveis para um usuário fazer solicitação de crédito.
+    
+    **Query Parameters:**
+    - amount: Valor solicitado
+    - duration_months: Prazo em meses
+    
+    **Retorna:**
+    - Lista de pools que atendem aos critérios do usuário
+    - Para cada pool: nome, taxa esperada, disponibilidade
+    """
+    service = CreditService(db)
+    result = service.get_compatible_pools(user_id, amount, duration_months)
     
     return result
