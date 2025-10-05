@@ -1,1 +1,0 @@
-# Imagem a ser feita para o frontend

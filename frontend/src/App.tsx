@@ -1,193 +1,129 @@
-import React, { useEffect } from 'react';
-import { AppProvider, useApp } from './components/AppProvider';
-import { SplashScreen } from './components/SplashScreen';
-import { WelcomeScreen } from './components/WelcomeScreen';
-import { RoleSelection } from './components/RoleSelection';
-import { AccountCreation } from './components/AccountCreation';
-import { OTPVerification } from './components/OTPVerification';
-import { KYCFacial } from './components/KYCFacial';
-import { KYCDocuments } from './components/KYCDocuments';
-import { OnboardingComplete } from './components/OnboardingComplete';
-import { BorrowerHome } from './components/BorrowerHome';
-import { LenderHome } from './components/LenderHome';
-import { CreditRequestFlow } from './components/CreditRequestFlow';
-import { SwapScreen } from './components/SwapScreen';
-import { CurrencySwapScreen } from './components/CurrencySwapScreen';
-import { PIXScreen } from './components/PIXScreen';
-import { PIXSendScreen } from './components/PIXSendScreen';
-import { PIXReceiveScreen } from './components/PIXReceiveScreen';
-import { QRScannerScreen } from './components/QRScannerScreen';
-import { QRFallbackScreen } from './components/QRFallbackScreen';
-import { QRConfirmationScreen } from './components/QRConfirmationScreen';
-import { CreatePoolScreen } from './components/CreatePoolScreen';
-import { PoolFundingScreen } from './components/PoolFundingScreen';
-import { PoolDistributionScreen } from './components/PoolDistributionScreen';
-import { PoolConfirmationScreen } from './components/PoolConfirmationScreen';
-import { DepositMethodScreen } from './components/DepositMethodScreen';
-import { MultiCurrencyDepositScreen } from './components/MultiCurrencyDepositScreen';
-import { OpenFinanceScreen } from './components/OpenFinanceScreen';
-import { BankAuthScreen } from './components/BankAuthScreen';
-import { AccountSelectionScreen } from './components/AccountSelectionScreen';
-import { DepositConfirmationScreen } from './components/DepositConfirmationScreen';
-import { DepositProcessingScreen } from './components/DepositProcessingScreen';
-import { DepositSuccessScreen } from './components/DepositSuccessScreen';
-import { PublicReceiptViewer } from './components/PublicReceiptViewer';
-import { PortfolioScreen } from './components/PortfolioScreen';
-import { PortfolioDetailScreen } from './components/PortfolioDetailScreen';
-import { PortfolioAnalyticsScreen } from './components/PortfolioAnalyticsScreen';
-import { LoansManagementScreen } from './components/LoansManagementScreen';
-import { TransactionsHistoryScreen } from './components/TransactionsHistoryScreen';
-
-import { ConfigScreen } from './components/ConfigScreen';
-import { ProfileEditScreen } from './components/ProfileEditScreen';
-import { SecuritySettingsScreen } from './components/SecuritySettingsScreen';
-import { BottomNavigation } from './components/BottomNavigation';
+import React, { useState, useEffect } from 'react';
+import { SplashScreen } from './src/features/auth/SplashScreen';
+import { WelcomeScreen } from './src/features/auth/WelcomeScreen';
+import { LoginScreen } from './src/features/auth/LoginScreen';
+import { OnboardingFlow } from './src/features/auth/OnboardingFlow';
+import { BorrowerDashboard } from './src/features/borrower/BorrowerDashboard';
+import { LenderDashboard } from './src/features/lender/LenderDashboard';
+import { AuthProvider, useAuth } from './src/shared/hooks/useAuth';
+import { WalletProvider } from './src/shared/hooks/useWallet';
+import { ToastProvider } from './src/shared/components/ui/Toast';
 import { Toaster } from './components/ui/sonner';
 
-function AppContent() {
-  const { currentScreen, user, setCurrentScreen } = useApp();
+type AppState = 'splash' | 'welcome' | 'login' | 'onboarding' | 'dashboard';
 
-  // Initialize with mock data for demo purposes
+const AppContent: React.FC = () => {
+  const [appState, setAppState] = useState<AppState>('splash');
+  const { user, isLoading } = useAuth();
+
   useEffect(() => {
-    // Add some mock data for lenders to see credit requests
-    const mockRequests = [
-      {
-        id: 'req_001',
-        borrowerId: 'borrower_001',
-        amount: 2500,
-        currency: 'BRL',
-        duration: 12,
-        riskScore: 750,
-        status: 'pending' as const,
-        documents: ['payslip', 'rg', 'cpf'],
-        requestDate: new Date(Date.now() - 86400000).toISOString()
-      },
-      {
-        id: 'req_002',
-        borrowerId: 'borrower_002',
-        amount: 5000,
-        currency: 'BRL',
-        duration: 18,
-        riskScore: 680,
-        status: 'pending' as const,
-        documents: ['payslip', 'rg'],
-        requestDate: new Date(Date.now() - 172800000).toISOString()
+    if (!isLoading) {
+      if (user) {
+        setAppState('dashboard');
+      } else if (appState === 'splash') {
+        // Keep splash state until user interaction
       }
-    ];
-
-    // Only add mock data if we don't have any yet
-    if (user?.role === 'lender') {
-      // This would normally come from the context's addCreditRequest
-      // but for demo purposes we'll add it directly
     }
-  }, [user]);
+  }, [user, isLoading, appState]);
 
-  const renderScreen = () => {
-    switch (currentScreen) {
-      case 'splash':
-        return <SplashScreen />;
-      case 'welcome':
-        return <WelcomeScreen />;
-      case 'role-selection':
-        return <RoleSelection />;
-      case 'account-creation':
-        return <AccountCreation />;
-      case 'otp-verification':
-        return <OTPVerification />;
-      case 'kyc-facial':
-        return <KYCFacial />;
-      case 'kyc-documents':
-        return <KYCDocuments />;
-      case 'onboarding-complete':
-        return <OnboardingComplete />;
-      case 'home':
-        return user?.role === 'borrower' ? <BorrowerHome /> : <LenderHome />;
-      case 'credit-request':
-        return <CreditRequestFlow />;
-      case 'swap':
-        return <SwapScreen />;
-      case 'currency-swap':
-        return <CurrencySwapScreen />;
-      case 'pix':
-        return <PIXScreen />;
-      case 'pix-send':
-        return <PIXSendScreen />;
-      case 'pix-receive':
-        return <PIXReceiveScreen />;
-      case 'qr-scanner':
-        return <QRScannerScreen />;
-      case 'qr-fallback':
-        return <QRFallbackScreen />;
-      case 'qr-confirmation':
-        return <QRConfirmationScreen />;
-      case 'create-pool':
-        return <CreatePoolScreen />;
-      case 'pool-funding':
-        return <PoolFundingScreen />;
-      case 'pool-distribution':
-        return <PoolDistributionScreen />;
-      case 'pool-confirmation':
-        return <PoolConfirmationScreen />;
-      case 'deposit':
-        return <MultiCurrencyDepositScreen />;
-      case 'open-finance':
-        return <OpenFinanceScreen />;
-      case 'bank-auth':
-        return <BankAuthScreen />;
-      case 'account-selection':
-        return <AccountSelectionScreen />;
-      case 'deposit-confirmation':
-        return <DepositConfirmationScreen />;
-      case 'deposit-processing':
-        return <DepositProcessingScreen />;
-      case 'deposit-success':
-        return <DepositSuccessScreen />;
-      case 'public-receipt':
-        // Extract receipt ID from URL or use a demo one
-        const receiptId = 'DEMO-RECEIPT-123';
-        return <PublicReceiptViewer receiptId={receiptId} onBack={() => setCurrentScreen('home')} />;
-      case 'portfolio':
-        return <PortfolioScreen />;
-      case 'portfolio-detail':
-        return <PortfolioDetailScreen />;
-      case 'portfolio-analytics':
-        return <PortfolioAnalyticsScreen />;
-      case 'loans-management':
-        return <LoansManagementScreen />;
-      case 'transactions-history':
-        return <TransactionsHistoryScreen />;
+  // Show loading while checking auth
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-white">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
 
-      case 'config':
-        return <ConfigScreen />;
-      case 'profile-edit':
-        return <ProfileEditScreen />;
-      case 'security-settings':
-        return <SecuritySettingsScreen />;
-      default:
-        return <SplashScreen />;
-    }
-  };
+  // Render based on current state
+  switch (appState) {
+    case 'splash':
+      return (
+        <SplashScreen 
+          onComplete={() => setAppState('welcome')} 
+        />
+      );
 
-  const showBottomNav = user && ['home', 'swap', 'currency-swap', 'config'].includes(currentScreen);
+    case 'welcome':
+      return (
+        <WelcomeScreen
+          onGetStarted={() => setAppState('onboarding')}
+          onLogin={() => setAppState('login')}
+        />
+      );
 
+    case 'login':
+      return (
+        <LoginScreen
+          onBack={() => setAppState('welcome')}
+          onSuccess={() => setAppState('dashboard')}
+          onForgotPassword={() => {
+            // TODO: Implement forgot password flow
+            console.log('Forgot password flow');
+          }}
+        />
+      );
+
+    case 'onboarding':
+      return (
+        <OnboardingFlow
+          onBack={() => setAppState('welcome')}
+          onComplete={() => setAppState('dashboard')}
+        />
+      );
+
+    case 'dashboard':
+      if (!user) {
+        setAppState('welcome');
+        return null;
+      }
+
+      return (
+        <WalletProvider>
+          {user.profileType === 'borrower' ? (
+            <BorrowerDashboard />
+          ) : (
+            <LenderDashboard />
+          )}
+        </WalletProvider>
+      );
+
+    default:
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-white mb-4">Estado inválido</h1>
+            <button 
+              onClick={() => setAppState('welcome')}
+              className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl transition-colors"
+            >
+              Voltar ao início
+            </button>
+          </div>
+        </div>
+      );
+  }
+};
+
+const App: React.FC = () => {
   return (
-    <div className="min-h-screen swapin-gradient dark">
-      {renderScreen()}
-      {showBottomNav && <BottomNavigation />}
-      <Toaster 
-        position="top-center"
-        richColors
-        closeButton
-        duration={3000}
-      />
-    </div>
+    <ToastProvider>
+      <AuthProvider>
+        <div className="font-sans antialiased">
+          <AppContent />
+          <Toaster 
+            position="top-center"
+            expand={true}
+            richColors={true}
+            closeButton={true}
+          />
+        </div>
+      </AuthProvider>
+    </ToastProvider>
   );
-}
+};
 
-export default function App() {
-  return (
-    <AppProvider>
-      <AppContent />
-    </AppProvider>
-  );
-}
+export default App;
