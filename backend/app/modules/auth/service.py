@@ -2,7 +2,8 @@ from typing import Optional, Tuple, Dict, Any
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from datetime import datetime
-import logging  # Adicione esta importação
+import logging
+import uuid
 
 from .repository import AuthRepository
 from app.core.security import (
@@ -13,6 +14,7 @@ from app.core.security import (
     decode_token
 )
 from app.core.config import settings
+from app.models.models import Wallet, OwnerType, Currency
 
 # Configuração básica do logger
 logger = logging.getLogger(__name__)
@@ -77,6 +79,14 @@ class AuthService:
                 entity = self.repository.create_investor(data)
                 entity_type_for_token = "investor"
                 logger.info("[AuthService/Register] Investidor criado com sucesso: %s", entity.email)
+                
+                # Criar carteira inicial para investidor com R$ 50.000
+                self._create_initial_wallet(
+                    owner_id=entity.investor_id,
+                    owner_type=OwnerType.INVESTOR,
+                    initial_balance=50000.0
+                )
+                
             else: # Padrão é BORROWER (User)
                 logger.info("[AuthService/Register] Criando um USUÁRIO (Tomador)")
                 # Garante que o profile_type correto seja salvo para o usuário
@@ -84,6 +94,13 @@ class AuthService:
                 entity = self.repository.create_user(data)
                 entity_type_for_token = "user"
                 logger.info("[AuthService/Register] Usuário criado com sucesso: %s", entity.email)
+                
+                # Criar carteira inicial para tomador com R$ 5.000
+                self._create_initial_wallet(
+                    owner_id=entity.user_id,
+                    owner_type=OwnerType.USER,
+                    initial_balance=5000.0
+                )
 
         except Exception as e:
             logger.error("[AuthService/Register] Erro ao criar no banco de dados: %s", str(e))
@@ -242,8 +259,36 @@ class AuthService:
             "expires_in": settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
         }
     
+    def _create_initial_wallet(self, owner_id: str, owner_type: OwnerType, initial_balance: float):
+        """Cria carteira inicial com saldo em BRL para novos usuários."""
+        try:
+            wallet_data = {
+                "wallet_id": str(uuid.uuid4()),
+                "owner_id": owner_id,
+                "owner_type": owner_type,
+                "currency": Currency.BRL,
+                "balance": initial_balance
+            }
+            
+            wallet = Wallet(**wallet_data)
+            self.db.add(wallet)
+            self.db.commit()
+            
+            logger.info(
+                f"[AuthService] Carteira inicial criada: owner_id={owner_id}, "
+                f"owner_type={owner_type.value}, balance=R$ {initial_balance:,.2f}"
+            )
+        except Exception as e:
+            logger.error(f"[AuthService] Erro ao criar carteira inicial: {str(e)}")
+            self.db.rollback()
+            # Não falha o registro se a carteira não for criada
+            # O usuário pode criar manualmente depois
+    
     def _entity_to_dict(self, entity: Any, user_type: str) -> dict:
         if user_type == "user":
+            # Usar calculated_score como fonte principal
+            final_score = entity.calculated_score if entity.calculated_score is not None else entity.credit_score
+            
             return {
                 "user_id": entity.user_id,
                 "email": entity.email,
@@ -255,7 +300,7 @@ class AuthService:
                 "cpf_cnpj": entity.cpf_cnpj,
                 "document_type": entity.document_type.value if hasattr(entity.document_type, 'value') else entity.document_type,
                 "date_of_birth": entity.date_of_birth.isoformat() if entity.date_of_birth else None,
-                "credit_score": entity.credit_score,
+                "credit_score": final_score,  # Usa calculated_score
                 "kyc_approved": entity.kyc_approved,
                 "created_at": entity.created_at.isoformat() if entity.created_at else None,
                 "updated_at": entity.updated_at.isoformat() if entity.updated_at else None
@@ -272,6 +317,7 @@ class AuthService:
                 "document_type": entity.document_type.value if hasattr(entity.document_type, 'value') else entity.document_type,
                 "date_of_birth": entity.date_of_birth.isoformat() if entity.date_of_birth else None,
                 "kyc_approved": entity.kyc_approved,
+                "credit_score": 0,  # Investidores não têm score
                 "created_at": entity.created_at.isoformat() if entity.created_at else None,
                 "updated_at": entity.updated_at.isoformat() if entity.updated_at else None
             }

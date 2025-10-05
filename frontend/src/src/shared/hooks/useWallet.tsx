@@ -31,7 +31,10 @@ interface WalletContextType {
   withdraw: (amount: number, currency: keyof WalletBalance, method: string, destination: string) => Promise<void>;
   swap: (fromCurrency: keyof WalletBalance, toCurrency: keyof WalletBalance, amount: number) => Promise<void>;
   refreshBalance: () => Promise<void>;
+  getTotalBalanceInBRL: () => number;
 }
+
+const USDC_TO_BRL_RATE = 5.15;
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
@@ -46,64 +49,156 @@ export const useWallet = () => {
 export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const [balance, setBalance] = useState<WalletBalance>({
-    brl: 25450.00,
-    usdc: 2100.50,
+    brl: 0,
+    usdc: 0,
     usdt: 0,
     dai: 0,
-    btc: 0.001,
-    eth: 0.05
+    btc: 0,
+    eth: 0
   });
   
   const [availableBalance, setAvailableBalance] = useState<WalletBalance>({
-    brl: 25450.00,
-    usdc: 2100.50,
-    usdt: 0,
-    dai: 0,
-    btc: 0.001,
-    eth: 0.05
-  });
-
-  const [investedBalance, setInvestedBalance] = useState<WalletBalance>({
     brl: 0,
-    usdc: 8420.00,
+    usdc: 0,
     usdt: 0,
     dai: 0,
     btc: 0,
     eth: 0
   });
 
-  const [transactions, setTransactions] = useState<WalletTransaction[]>([
-    {
-      id: '1',
-      type: 'deposit',
-      amount: 1000.00,
-      currency: 'brl',
-      date: '2024-10-01T10:00:00Z',
-      status: 'completed',
-      description: 'Depósito via PIX'
-    },
-    {
-      id: '2',
-      type: 'loan_received',
-      amount: 5000.00,
-      currency: 'brl',
-      date: '2024-10-01T14:30:00Z',
-      status: 'completed',
-      description: 'Empréstimo aprovado - Pool Diversificação'
-    },
-    {
-      id: '3',
-      type: 'swap',
-      amount: 500.00,
-      currency: 'usdc',
-      date: '2024-10-02T09:15:00Z',
-      status: 'completed',
-      description: 'Conversão BRL → USDC',
-      hash: '0x1234...5678'
-    }
-  ]);
+  const [investedBalance, setInvestedBalance] = useState<WalletBalance>({
+    brl: 0,
+    usdc: 0,
+    usdt: 0,
+    dai: 0,
+    btc: 0,
+    eth: 0
+  });
+
+  const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
 
   const [isLoading, setIsLoading] = useState(false);
+
+  // Função para buscar carteiras do backend
+  const fetchWallets = async () => {
+    if (!user) return;
+
+    // Buscar userId do localStorage (funciona para user e investor)
+    const swapinUser = localStorage.getItem('swapin_user');
+    if (!swapinUser) return;
+
+    const userData = JSON.parse(swapinUser);
+    const userId = userData.id; // O transformApiUser já coloca user_id ou investor_id em "id"
+    
+    // Determinar owner_type baseado no profileType
+    // Se profileType for "lender", é INVESTOR, caso contrário é USER
+    const ownerType = userData.profileType === 'lender' ? 'INVESTOR' : 'USER';
+
+    if (!userId) return;
+
+    setIsLoading(true);
+    try {
+      const response = await fetch(
+        `http://localhost:8000/api/v1/wallet/${ownerType}/${userId}`
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const wallets = await response.json();
+
+      // Processar wallets e consolidar por moeda
+      const newBalance: WalletBalance = {
+        brl: 0,
+        usdc: 0,
+        usdt: 0,
+        dai: 0,
+        btc: 0,
+        eth: 0
+      };
+
+      wallets.forEach((wallet: any) => {
+        const currency = wallet.currency.toLowerCase() as keyof WalletBalance;
+        if (currency in newBalance) {
+          newBalance[currency] += wallet.balance || 0;
+        }
+      });
+
+      setBalance(newBalance);
+      setAvailableBalance(newBalance); // Por enquanto, disponível = total
+      
+      console.log('[useWallet] Carteiras carregadas:', wallets);
+      console.log('[useWallet] Saldo consolidado:', newBalance);
+    } catch (err) {
+      console.error('Erro ao buscar carteiras:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Buscar transações do backend
+  const fetchTransactions = async () => {
+    if (!user) return;
+
+    const swapinUser = localStorage.getItem('swapin_user');
+    if (!swapinUser) return;
+
+    const userData = JSON.parse(swapinUser);
+    const userId = userData.id;
+
+    if (!userId) return;
+
+    try {
+      // Buscar as primeiras carteiras para pegar wallet_id
+      const ownerType = userData.profileType === 'lender' ? 'INVESTOR' : 'USER';
+      const walletsResponse = await fetch(
+        `http://localhost:8000/api/v1/wallet/${ownerType}/${userId}`
+      );
+
+      if (!walletsResponse.ok) return;
+
+      const wallets = await walletsResponse.json();
+      if (wallets.length === 0) return;
+
+      // Buscar transações da primeira carteira (BRL)
+      const brlWallet = wallets.find((w: any) => w.currency.toLowerCase() === 'brl');
+      if (!brlWallet) return;
+
+      const txResponse = await fetch(
+        `http://localhost:8000/api/v1/transaction/wallet/${brlWallet.wallet_id}`
+      );
+
+      if (!txResponse.ok) return;
+
+      const txData = await txResponse.json();
+      
+      // Converter formato do backend para o esperado pelo frontend
+      const formattedTransactions: WalletTransaction[] = txData.map((tx: any) => ({
+        id: tx.transaction_id,
+        type: tx.transaction_type.toLowerCase() as any,
+        amount: tx.amount,
+        currency: tx.currency?.toLowerCase() || 'brl',
+        date: tx.created_at,
+        status: tx.status.toLowerCase() as any,
+        description: tx.description || 'Transação',
+        hash: tx.blockchain_hash
+      }));
+
+      setTransactions(formattedTransactions);
+      console.log('[useWallet] Transações carregadas:', formattedTransactions);
+    } catch (err) {
+      console.error('Erro ao buscar transações:', err);
+    }
+  };
+
+  // Carregar dados quando o usuário estiver disponível
+  useEffect(() => {
+    if (user) {
+      fetchWallets();
+      fetchTransactions();
+    }
+  }, [user]);
 
   const deposit = async (amount: number, currency: keyof WalletBalance, method: string) => {
     setIsLoading(true);
@@ -208,10 +303,12 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const refreshBalance = async () => {
-    setIsLoading(true);
-    // TODO: GET /api/wallet/balance
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setIsLoading(false);
+    await fetchWallets();
+    await fetchTransactions();
+  };
+
+  const getTotalBalanceInBRL = (): number => {
+    return balance.brl + (balance.usdc * USDC_TO_BRL_RATE);
   };
 
   return (
@@ -224,7 +321,8 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       deposit,
       withdraw,
       swap,
-      refreshBalance
+      refreshBalance,
+      getTotalBalanceInBRL
     }}>
       {children}
     </WalletContext.Provider>

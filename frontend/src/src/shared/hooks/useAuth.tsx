@@ -23,23 +23,27 @@ interface User {
 }
 
 const transformApiUser = (apiUser: any): User => {
-  return {
-    id: apiUser.user_id,
-    name: apiUser.full_name,
-    email: apiUser.email,
-    phone: apiUser.phone,
-    // ✅ CORREÇÃO: Acessa de forma segura e define um valor padrão se não existir.
-    profileType: apiUser.profile_type?.toLowerCase() ?? "borrower", 
-    userType: apiUser.user_type?.toLowerCase(), // O optional chaining aqui já ajuda
-    isVerified: apiUser.kyc_approved,
-    score: apiUser.credit_score,
-    kycStatus: apiUser.kycStatus || "pending",
-    scoreLevel: apiUser.scoreLevel || "Bronze",
-    avatar: apiUser.avatar || undefined,
-  };
-};
+  // Normalizar profile_type: INVESTOR → lender, BORROWER → borrower
+  let profileType: "borrower" | "lender" = "borrower";
+  if (apiUser.profile_type) {
+    const type = apiUser.profile_type.toUpperCase();
+    profileType = type === "INVESTOR" ? "lender" : "borrower";
+  }
 
-interface AuthContextType {
+  return {
+    id: apiUser.user_id,
+    name: apiUser.full_name,
+    email: apiUser.email,
+    phone: apiUser.phone,
+    profileType: profileType,
+    userType: apiUser.user_type?.toLowerCase(), // O optional chaining aqui já ajuda
+    isVerified: apiUser.kyc_approved,
+    score: apiUser.credit_score || 0,
+    kycStatus: apiUser.kycStatus || "pending",
+    scoreLevel: apiUser.scoreLevel || "Bronze",
+    avatar: apiUser.avatar || undefined,
+  };
+};interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;

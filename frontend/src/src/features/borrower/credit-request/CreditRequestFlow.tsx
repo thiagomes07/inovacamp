@@ -9,7 +9,7 @@ import { ApprovalTypeSelection } from './ApprovalTypeSelection';
 import { LoanReview } from './LoanReview';
 import { LoanProcessing } from './LoanProcessing';
 import { useCredit } from '../../../shared/hooks/useCredit';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 export interface CreditRequestData {
   // Loan conditions
@@ -104,7 +104,7 @@ export const CreditRequestFlow: React.FC<CreditRequestFlowProps> = ({
       setCurrentStep('processing');
 
       // Submit credit request
-      await requestCredit({
+      const result = await requestCredit({
         amount: requestData.amount,
         installments: requestData.installments,
         interestRate: requestData.interestRate,
@@ -118,6 +118,11 @@ export const CreditRequestFlow: React.FC<CreditRequestFlowProps> = ({
         } : undefined,
         approvalType: requestData.approvalType
       });
+
+      // Check if was approved
+      if (result && result.status === 'approved') {
+        setRequestData(prev => ({ ...prev, isApproved: true }));
+      }
 
       // Processing will be handled by the LoanProcessing component
     } catch (error) {

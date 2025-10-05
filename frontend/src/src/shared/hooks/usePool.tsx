@@ -1,31 +1,42 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useAuth } from './useAuth';
+
+const API_URL = 'http://localhost:8000/api/v1';
 
 export interface Pool {
   id: string;
   name: string;
   description?: string;
   totalCapital: number;
-  availableCapital: number;
-  allocatedCapital: number;
-  maxLoansCount: number;
-  currentLoansCount: number;
-  criteria: {
+  availableCapital?: number;
+  allocatedCapital?: number;
+  allocatedAmount?: number;
+  availableAmount?: number;
+  maxLoansCount?: number;
+  currentLoansCount?: number;
+  criteria?: {
     minScore: number;
     requiresCollateral: boolean;
     collateralTypes: string[];
     minInterestRate: number;
     maxTermMonths: number;
   };
-  performance: {
+  performance?: {
     averageReturn: number;
     totalLoans: number;
     defaultRate: number;
     completedLoans: number;
   };
-  status: 'active' | 'paused' | 'completed' | 'draft';
+  status: 'active' | 'funding' | 'closed' | 'draft';
   createdAt: string;
-  ownerId: string;
+  ownerId?: string;
+  investorId?: string;
+  expectedReturn?: number;
+  averageReturn?: number;
+  completedLoans?: number;
+  durationMonths?: number;
+  riskProfile?: string;
+  loans?: PoolAllocation[];
 }
 
 export interface PoolAllocation {
@@ -83,60 +94,7 @@ interface UsePoolReturn {
 
 export const usePool = (): UsePoolReturn => {
   const { user } = useAuth();
-  const [pools, setPools] = useState<Pool[]>([
-    {
-      id: 'pool-1',
-      name: 'Diversificação Brasil',
-      description: 'Pool focada em diversificação de crédito para pessoas físicas',
-      totalCapital: 50000,
-      availableCapital: 15000,
-      allocatedCapital: 35000,
-      maxLoansCount: 10,
-      currentLoansCount: 7,
-      criteria: {
-        minScore: 700,
-        requiresCollateral: true,
-        collateralTypes: ['vehicle', 'property'],
-        minInterestRate: 18,
-        maxTermMonths: 12
-      },
-      performance: {
-        averageReturn: 18.5,
-        totalLoans: 12,
-        defaultRate: 2.1,
-        completedLoans: 5
-      },
-      status: 'active',
-      createdAt: '2024-09-01T10:00:00Z',
-      ownerId: user?.id || '1'
-    },
-    {
-      id: 'pool-2',
-      name: 'Renda Fixa Plus',
-      description: 'Pool conservadora para investidores que buscam segurança',
-      totalCapital: 25000,
-      availableCapital: 0,
-      allocatedCapital: 25000,
-      maxLoansCount: 5,
-      currentLoansCount: 5,
-      criteria: {
-        minScore: 750,
-        requiresCollateral: true,
-        collateralTypes: ['property', 'receivables'],
-        minInterestRate: 15,
-        maxTermMonths: 24
-      },
-      performance: {
-        averageReturn: 16.2,
-        totalLoans: 8,
-        defaultRate: 0,
-        completedLoans: 3
-      },
-      status: 'completed',
-      createdAt: '2024-08-15T10:00:00Z',
-      ownerId: user?.id || '1'
-    }
-  ]);
+  const [pools, setPools] = useState<Pool[]>([]);
 
   const [allocations, setAllocations] = useState<PoolAllocation[]>([
     {
@@ -183,47 +141,95 @@ export const usePool = (): UsePoolReturn => {
 
   const [isLoading, setIsLoading] = useState(false);
 
-  const createPool = useCallback(async (data: CreatePoolData): Promise<Pool> => {
+  // Fetch pools on mount
+  useEffect(() => {
+    if (user?.id) {
+      fetchPools();
+    }
+  }, [user?.id]);
+
+  const fetchPools = useCallback(async () => {
+    if (!user?.id) return;
+    
     setIsLoading(true);
-
     try {
-      // TODO: POST /api/pools
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      const newPool: Pool = {
-        id: Math.random().toString(36).substr(2, 9),
-        ...data,
-        availableCapital: data.totalCapital,
-        allocatedCapital: 0,
-        currentLoansCount: 0,
-        performance: {
-          averageReturn: 0,
-          totalLoans: 0,
-          defaultRate: 0,
-          completedLoans: 0
-        },
-        status: 'active',
-        createdAt: new Date().toISOString(),
-        ownerId: user?.id || '1'
-      };
-
-      setPools(prev => [newPool, ...prev]);
-      return newPool;
+      const response = await fetch(`${API_URL}/pool/investor/${user.id}`);
+      if (!response.ok) throw new Error('Failed to fetch pools');
+      
+      const data = await response.json();
+      setPools(data);
+    } catch (error) {
+      console.error('Error fetching pools:', error);
     } finally {
       setIsLoading(false);
     }
   }, [user?.id]);
 
+  const createPool = useCallback(async (data: CreatePoolData): Promise<Pool> => {
+    setIsLoading(true);
+
+    try {
+      if (!user?.id) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      // Mapeia dados do frontend para backend (snake_case)
+      const payload = {
+        investor_id: user.id,
+        name: data.name,
+        description: data.description,
+        target_amount: data.totalCapital,
+        duration_months: data.criteria.maxTermMonths || 24,
+        expected_return: 0, // Será calculado baseado nos empréstimos
+        min_score: data.criteria.minScore,
+        requires_collateral: data.criteria.requiresCollateral,
+        min_interest_rate: data.criteria.minInterestRate,
+        max_term_months: data.criteria.maxTermMonths,
+      };
+
+      const response = await fetch(`${API_URL}/pool`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to create pool');
+      }
+      
+      const newPool = await response.json();
+      
+      // TODO: Implementar débito da carteira considerando conversão USDC→BRL (taxa 5.15)
+      // O backend deve debitar primeiro do saldo BRL, e se não for suficiente,
+      // converter USDC para BRL na proporção necessária
+      
+      // Atualiza lista de pools
+      await fetchPools();
+      
+      return newPool;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user?.id, fetchPools]);
+
   const updatePool = useCallback(async (poolId: string, updates: Partial<Pool>) => {
     setIsLoading(true);
 
     try {
-      // TODO: PUT /api/pools/:id
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const response = await fetch(`${API_URL}/pool/${poolId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      });
 
+      if (!response.ok) throw new Error('Failed to update pool');
+      
+      const updatedPool = await response.json();
+      
       setPools(prev => 
         prev.map(pool => 
-          pool.id === poolId ? { ...pool, ...updates } : pool
+          pool.id === poolId ? { ...pool, ...updatedPool } : pool
         )
       );
     } finally {
@@ -232,35 +238,58 @@ export const usePool = (): UsePoolReturn => {
   }, []);
 
   const pausePool = useCallback(async (poolId: string) => {
-    await updatePool(poolId, { status: 'paused' });
-  }, [updatePool]);
+    setIsLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/pool/${poolId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'funding' })
+      });
+
+      if (!response.ok) throw new Error('Failed to pause pool');
+      
+      await fetchPools(); // Refresh pools
+    } finally {
+      setIsLoading(false);
+    }
+  }, [fetchPools]);
 
   const resumePool = useCallback(async (poolId: string) => {
-    await updatePool(poolId, { status: 'active' });
-  }, [updatePool]);
+    setIsLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/pool/${poolId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'active' })
+      });
+
+      if (!response.ok) throw new Error('Failed to resume pool');
+      
+      await fetchPools(); // Refresh pools
+    } finally {
+      setIsLoading(false);
+    }
+  }, [fetchPools]);
 
   const increaseCapital = useCallback(async (poolId: string, amount: number) => {
     setIsLoading(true);
 
     try {
-      // TODO: POST /api/pools/:id/increase-capital
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const response = await fetch(`${API_URL}/pool/${poolId}/increase-capital`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount })
+      });
 
-      setPools(prev => 
-        prev.map(pool => 
-          pool.id === poolId 
-            ? { 
-                ...pool, 
-                totalCapital: pool.totalCapital + amount,
-                availableCapital: pool.availableCapital + amount
-              }
-            : pool
-        )
-      );
+      if (!response.ok) throw new Error('Failed to increase capital');
+      
+      await fetchPools(); // Refresh pools
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [fetchPools]);
 
   const getPoolStats = useCallback((poolId: string) => {
     const pool = pools.find(p => p.id === poolId);
@@ -275,11 +304,14 @@ export const usePool = (): UsePoolReturn => {
       };
     }
 
+    const allocatedCapital = pool.allocatedAmount || pool.allocatedCapital || 0;
+    const currentLoansCount = pool.currentLoansCount || poolAllocations.length;
+
     const totalReturn = poolAllocations.reduce((sum, alloc) => sum + alloc.totalPaid, 0);
-    const monthlyReturn = totalReturn / Math.max(1, poolAllocations.length); // Simplified
-    const utilizationRate = (pool.allocatedCapital / pool.totalCapital) * 100;
-    const avgLoanSize = pool.currentLoansCount > 0 
-      ? pool.allocatedCapital / pool.currentLoansCount 
+    const monthlyReturn = totalReturn / Math.max(1, poolAllocations.length);
+    const utilizationRate = (allocatedCapital / pool.totalCapital) * 100;
+    const avgLoanSize = currentLoansCount > 0 
+      ? allocatedCapital / currentLoansCount 
       : 0;
 
     return {
@@ -291,6 +323,8 @@ export const usePool = (): UsePoolReturn => {
   }, [pools, allocations]);
 
   const getEligibleBorrowers = useCallback((criteria: Pool['criteria']): number => {
+    if (!criteria) return 0;
+    
     // Mock calculation of eligible borrowers based on criteria
     let baseEligible = 1000; // Base number of users
 

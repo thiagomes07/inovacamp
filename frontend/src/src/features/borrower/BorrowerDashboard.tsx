@@ -23,6 +23,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useAuth } from '../../shared/hooks/useAuth';
 import { useWallet } from '../../shared/hooks/useWallet';
 import { useCredit } from '../../shared/hooks/useCredit';
+import { useBorrowerDashboard } from '../../shared/hooks/useBorrowerDashboard';
+import { useApprovedCredit } from '../../shared/hooks/useApprovedCredit';
+import { useScore } from '../../shared/hooks/useScore';
 import { BottomNavigation } from '../../shared/components/ui/BottomNavigation';
 import { CreditRequestFlow } from './credit-request/CreditRequestFlow';
 import { WithdrawFlow } from './withdraw/WithdrawFlow';
@@ -45,58 +48,38 @@ interface Loan {
 export const BorrowerDashboard: React.FC = () => {
   const { user, logout } = useAuth();
   const { balance } = useWallet();
-  const { getCreditLimit, getAvailableCredit } = useCredit();
+  const { getCreditLimit } = useCredit();
   const [currentView, setCurrentView] = useState<DashboardView>('main');
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
 
   const [creditAmount, setCreditAmount] = useState('');
 
-  const mockLoans: Loan[] = [
-    {
-      id: '1',
-      amount: 5000,
-      nextPayment: 450.50,
-      daysUntilPayment: 12,
-      source: 'Pool Diversificação Brasil',
-      type: 'pool'
-    },
-    {
-      id: '2',
-      amount: 2000,
-      nextPayment: 180.00,
-      daysUntilPayment: 8,
-      source: 'João Santos',
-      type: 'direct'
-    }
-  ];
+  // Buscar dados reais do dashboard
+  const {
+    activeLoans,
+    recentTransactions,
+    statistics,
+    isLoading: dashboardLoading,
+    refresh: refreshDashboard
+  } = useBorrowerDashboard(user?.id || '');
 
-  const mockTransactions = [
-    {
-      id: '1',
-      type: 'loan_received',
-      amount: 5000,
-      date: '2024-10-01',
-      description: 'Empréstimo aprovado - Pool Diversificação'
-    },
-    {
-      id: '2',
-      type: 'deposit',
-      amount: 1000,
-      date: '2024-10-01',
-      description: 'Depósito via PIX'
-    },
-    {
-      id: '3',
-      type: 'loan_payment',
-      amount: -450.50,
-      date: '2024-09-30',
-      description: 'Pagamento parcela 1/12'
-    }
-  ];
+  // Buscar crédito aprovado do banco de dados
+  const { approvedCredit } = useApprovedCredit(user?.id || '');
+
+  // Buscar score atualizado do banco de dados
+  const { score: currentScore, isLoading: scoreLoading } = useScore(user?.id || '');
+
+  // Converter formato de transação para o esperado pelo componente
+  const formattedTransactions = recentTransactions.map(tx => ({
+    id: tx.id,
+    type: tx.type,
+    amount: tx.type.toLowerCase().includes('payment') || tx.type.toLowerCase().includes('withdrawal') ? -Math.abs(tx.amount) : tx.amount,
+    date: tx.date,
+    description: tx.description
+  }));
 
   const creditLimit = getCreditLimit();
-  const approvedCredit = getAvailableCredit();
-  const scoreProgress = (user?.score || 0) / 1000 * 100;
+  const scoreProgress = (currentScore || 0) / 1000 * 100;
 
   const handleRequestCredit = () => {
     if (!creditAmount || parseFloat(creditAmount) <= 0) {
@@ -366,7 +349,9 @@ export const BorrowerDashboard: React.FC = () => {
             <div className="space-y-3">
               <div>
                 <div className="flex justify-between mb-2">
-                  <span className="text-white font-bold text-2xl">{user?.score}</span>
+                  <span className="text-white font-bold text-2xl">
+                    {scoreLoading ? '...' : currentScore}
+                  </span>
                   <span className="text-gray-400 text-sm">de 1000</span>
                 </div>
                 <div className="w-full bg-gray-700 rounded-full h-2">
@@ -409,7 +394,12 @@ export const BorrowerDashboard: React.FC = () => {
             </div>
             
             <div className="space-y-3">
-              {mockLoans.map((loan) => (
+              {activeLoans.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-400">Nenhum empréstimo ativo no momento</p>
+                </div>
+              ) : (
+                activeLoans.map((loan) => (
                 <div 
                   key={loan.id}
                   className="bg-gray-800/50 rounded-xl p-4 border border-gray-700"
@@ -453,7 +443,8 @@ export const BorrowerDashboard: React.FC = () => {
                     <span className="text-yellow-400">{loan.daysUntilPayment} dias</span>
                   </div>
                 </div>
-              ))}
+                ))
+              )}
             </div>
           </Card>
         </motion.div>
@@ -475,7 +466,12 @@ export const BorrowerDashboard: React.FC = () => {
             </div>
             
             <div className="space-y-3">
-              {mockTransactions.map((transaction) => (
+              {formattedTransactions.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-400">Nenhuma transação recente</p>
+                </div>
+              ) : (
+                formattedTransactions.map((transaction) => (
                 <div 
                   key={transaction.id}
                   className="flex items-center justify-between p-3 bg-gray-800/30 rounded-xl"
@@ -502,7 +498,8 @@ export const BorrowerDashboard: React.FC = () => {
                     R$ {Math.abs(transaction.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
-              ))}
+                ))
+              )}
             </div>
           </Card>
         </motion.div>

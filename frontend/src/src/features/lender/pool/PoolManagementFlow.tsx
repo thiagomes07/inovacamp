@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Card } from '../../../../components/ui/card';
 import { Button } from '../../../../components/ui/button';
@@ -34,6 +34,8 @@ import {
 } from 'lucide-react';
 import { MaskedInput } from '../../../shared/components/ui/MaskedInput';
 import { toast } from 'sonner@2.0.3';
+import { usePool, Pool as PoolType } from '../../../shared/hooks/usePool';
+import { useAuth } from '../../../shared/hooks/useAuth';
 
 interface PoolManagementFlowProps {
   onBack: () => void;
@@ -42,7 +44,7 @@ interface PoolManagementFlowProps {
 interface Pool {
   id: string;
   name: string;
-  status: 'active' | 'paused' | 'completed';
+  status: 'active' | 'funding' | 'closed';
   totalAmount: number;
   allocatedAmount: number;
   availableAmount: number;
@@ -197,16 +199,40 @@ const mockLoans: Loan[] = [
 ];
 
 export const PoolManagementFlow: React.FC<PoolManagementFlowProps> = ({ onBack }) => {
+  const { user } = useAuth();
+  const { pools: poolsFromHook, isLoading, pausePool, resumePool, updatePool } = usePool();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
-  const [selectedPool, setSelectedPool] = useState<Pool | null>(null);
-  const [pools, setPools] = useState<Pool[]>(mockPools);
-  const [editingPool, setEditingPool] = useState<Pool | null>(null);
+  const [selectedPool, setSelectedPool] = useState<PoolType | null>(null);
+  const [editingPool, setEditingPool] = useState<PoolType | null>(null);
+
+  // Mapeia os pools do backend para o formato esperado pelo componente
+  const pools = poolsFromHook.map(pool => ({
+    id: pool.id,
+    name: pool.name,
+    status: pool.status as 'active' | 'funding' | 'closed',
+    totalAmount: pool.totalCapital,
+    allocatedAmount: pool.allocatedAmount || 0,
+    availableAmount: pool.availableAmount || pool.totalCapital - (pool.allocatedAmount || 0),
+    totalLoans: pool.currentLoansCount || 0,
+    filledLoans: pool.currentLoansCount || 0,
+    performance: {
+      accumulatedReturn: 0,
+      averageRate: pool.averageReturn || pool.expectedReturn || 0,
+      onTimePayments: 100
+    },
+    criteria: {
+      minScore: 700,
+      requireCollateral: true,
+      minReturn: pool.expectedReturn || 0,
+      maxTerm: pool.durationMonths || 12
+    }
+  }));
 
   const getStatusColor = (status: Pool['status']) => {
     switch (status) {
       case 'active': return 'text-green-400';
-      case 'paused': return 'text-yellow-400';
-      case 'completed': return 'text-gray-400';
+      case 'funding': return 'text-yellow-400';
+      case 'closed': return 'text-gray-400';
       default: return 'text-gray-400';
     }
   };
@@ -214,8 +240,8 @@ export const PoolManagementFlow: React.FC<PoolManagementFlowProps> = ({ onBack }
   const getStatusIcon = (status: Pool['status']) => {
     switch (status) {
       case 'active': return '🟢';
-      case 'paused': return '🟡';
-      case 'completed': return '🔴';
+      case 'funding': return '🟡';
+      case 'closed': return '🔴';
       default: return '⚪';
     }
   };
@@ -229,40 +255,86 @@ export const PoolManagementFlow: React.FC<PoolManagementFlowProps> = ({ onBack }
     }
   };
 
-  const handlePoolAction = (action: 'pause' | 'resume' | 'delete', poolId: string) => {
-    setPools(prev => prev.map(pool => {
-      if (pool.id === poolId) {
-        switch (action) {
-          case 'pause':
-            toast.success(`Pool "${pool.name}" pausada com sucesso!`);
-            return { ...pool, status: 'paused' as const };
-          case 'resume':
-            toast.success(`Pool "${pool.name}" reativada com sucesso!`);
-            return { ...pool, status: 'active' as const };
-          case 'delete':
-            toast.success(`Pool "${pool.name}" encerrada com sucesso!`);
-            return { ...pool, status: 'completed' as const };
-        }
+  const handlePoolAction = async (action: 'pause' | 'resume' | 'delete', poolId: string) => {
+    try {
+      const pool = pools.find(p => p.id === poolId);
+      if (!pool) return;
+
+      switch (action) {
+        case 'pause':
+          await pausePool(poolId);
+          toast.success(`Pool "${pool.name}" pausada com sucesso!`);
+          break;
+        case 'resume':
+          await resumePool(poolId);
+          toast.success(`Pool "${pool.name}" reativada com sucesso!`);
+          break;
+        case 'delete':
+          // Close pool via status update
+          await updatePool(poolId, { status: 'closed' });
+          toast.success(`Pool "${pool.name}" encerrada com sucesso!`);
+          break;
       }
-      return pool;
-    }));
+    } catch (error) {
+      toast.error('Erro ao atualizar pool');
+      console.error(error);
+    }
   };
 
-  const handleEditPool = (pool: Pool) => {
-    setEditingPool({ ...pool });
-    setViewMode('edit');
+  const handleEditPool = (pool: any) => {
+    // Find the original pool from hook to get full data
+    const originalPool = poolsFromHook.find(p => p.id === pool.id);
+    if (originalPool) {
+      setEditingPool(originalPool);
+      setViewMode('edit');
+    }
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editingPool) return;
     
-    setPools(prev => prev.map(pool => 
-      pool.id === editingPool.id ? editingPool : pool
-    ));
+    // Validações obrigatórias
+    if (!editingPool.expectedReturn || editingPool.expectedReturn <= 0) {
+      toast.error('O retorno esperado deve ser maior que zero');
+      return;
+    }
     
-    toast.success(`Pool "${editingPool.name}" atualizada com sucesso!`);
-    setViewMode('list');
-    setEditingPool(null);
+    if (!editingPool.durationMonths || editingPool.durationMonths <= 0) {
+      toast.error('A duração deve ser maior que zero');
+      return;
+    }
+    
+    if (!editingPool.totalCapital || editingPool.totalCapital < 1000) {
+      toast.error('O capital total deve ser no mínimo R$ 1.000');
+      return;
+    }
+    
+    try {
+      // Prepara dados com mapeamento correto para backend (snake_case)
+      const updateData: any = {
+        name: editingPool.name,
+        expected_return: editingPool.expectedReturn,
+        duration_months: editingPool.durationMonths,
+        target_amount: editingPool.totalCapital
+      };
+
+      // Adiciona critérios se existirem
+      if (editingPool.criteria) {
+        updateData.min_score = editingPool.criteria.minScore;
+        updateData.requires_collateral = editingPool.criteria.requiresCollateral;
+        updateData.min_interest_rate = editingPool.criteria.minInterestRate;
+        updateData.max_term_months = editingPool.criteria.maxTermMonths;
+      }
+      
+      await updatePool(editingPool.id, updateData);
+      
+      toast.success(`Pool "${editingPool.name}" atualizada com sucesso!`);
+      setViewMode('list');
+      setEditingPool(null);
+    } catch (error) {
+      toast.error('Erro ao atualizar pool');
+      console.error(error);
+    }
   };
 
   const renderPoolList = () => (
@@ -291,7 +363,7 @@ export const PoolManagementFlow: React.FC<PoolManagementFlowProps> = ({ onBack }
                       <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
                         <span className="text-xs sm:text-sm text-gray-400">Status:</span>
                         <span className={`text-xs sm:text-sm font-medium ${getStatusColor(pool.status)} flex items-center gap-1`}>
-                          {getStatusIcon(pool.status)} {pool.status === 'active' ? 'Ativa' : pool.status === 'paused' ? 'Pausada' : 'Finalizada'}
+                          {getStatusIcon(pool.status)} {pool.status === 'active' ? 'Ativa' : pool.status === 'funding' ? 'Financiando' : 'Finalizada'}
                         </span>
                       </div>
                     </div>
@@ -349,19 +421,25 @@ export const PoolManagementFlow: React.FC<PoolManagementFlowProps> = ({ onBack }
 
                 {/* Performance - Responsive Flex with Wrap */}
                 <div>
-                  <h4 className="text-base font-semibold text-white mb-3">Performance</h4>
+                  <h4 className="text-base font-semibold text-white mb-3">Performance e Lucro</h4>
                   <div className="flex flex-wrap justify-end gap-3 sm:gap-4">
                     <div className="text-center min-w-[120px] flex-1">
                       <div className="text-base sm:text-lg font-semibold text-green-400">
                         {formatCurrency(pool.performance.accumulatedReturn)}
                       </div>
-                      <p className="text-xs sm:text-sm text-gray-400">Retorno acumulado</p>
+                      <p className="text-xs sm:text-sm text-gray-400">Retorno real acumulado</p>
                     </div>
                     <div className="text-center min-w-[120px] flex-1">
                       <div className="text-base sm:text-lg font-semibold text-blue-400">
-                        {pool.performance.averageRate}% a.a.
+                        {pool.performance.averageRate.toFixed(1)}% a.a.
                       </div>
-                      <p className="text-xs sm:text-sm text-gray-400">Taxa média efetiva</p>
+                      <p className="text-xs sm:text-sm text-gray-400">Taxa efetiva (com alocação atual)</p>
+                    </div>
+                    <div className="text-center min-w-[120px] flex-1">
+                      <div className="text-base sm:text-lg font-semibold text-green-500">
+                        {formatCurrency(Math.abs(pool.allocatedAmount * (pool.performance.averageRate / 100) * (pool.criteria.maxTerm / 12)))}
+                      </div>
+                      <p className="text-xs sm:text-sm text-gray-400">Lucro projetado ({pool.criteria.maxTerm}m)</p>
                     </div>
                     <div className="text-center min-w-[120px] flex-1">
                       <div className="text-base sm:text-lg font-semibold text-purple-400">
@@ -378,8 +456,12 @@ export const PoolManagementFlow: React.FC<PoolManagementFlowProps> = ({ onBack }
                     size="sm"
                     variant="outline"
                     onClick={() => {
-                      setSelectedPool(pool);
-                      setViewMode('details');
+                      // Find original pool from hook
+                      const originalPool = poolsFromHook.find(p => p.id === pool.id);
+                      if (originalPool) {
+                        setSelectedPool(originalPool);
+                        setViewMode('details');
+                      }
                     }}
                     className="w-full sm:flex-1 border-blue-600 text-[rgba(179,221,255,1)] hover:bg-blue-600/10 bg-[rgba(255,255,255,0.08)]"
                   >
@@ -430,8 +512,10 @@ export const PoolManagementFlow: React.FC<PoolManagementFlowProps> = ({ onBack }
   const renderPoolDetails = () => {
     if (!selectedPool) return null;
 
-    const poolLoans = mockLoans.filter(loan => loan.poolId === selectedPool.id);
-    const remainingSlots = selectedPool.totalLoans - selectedPool.filledLoans;
+    const poolLoans = selectedPool.loans || mockLoans.filter(loan => loan.poolId === selectedPool.id);
+    const currentLoansCount = selectedPool.currentLoansCount || 0;
+    const maxLoansCount = selectedPool.maxLoansCount || 10;
+    const remainingSlots = maxLoansCount - currentLoansCount;
 
     return (
       <div className="space-y-6">
@@ -455,25 +539,25 @@ export const PoolManagementFlow: React.FC<PoolManagementFlowProps> = ({ onBack }
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="text-center">
               <div className="text-xl font-bold text-green-400">
-                {formatCurrency(selectedPool.totalAmount)}
+                {formatCurrency(selectedPool.totalCapital)}
               </div>
               <p className="text-sm text-gray-400">Capital Total</p>
             </div>
             <div className="text-center">
               <div className="text-xl font-bold text-blue-400">
-                {formatCurrency(selectedPool.allocatedAmount)}
+                {formatCurrency(selectedPool.allocatedAmount || 0)}
               </div>
               <p className="text-sm text-gray-400">Alocado</p>
             </div>
             <div className="text-center">
               <div className="text-xl font-bold text-yellow-400">
-                {selectedPool.filledLoans}/{selectedPool.totalLoans}
+                {currentLoansCount}/{maxLoansCount}
               </div>
               <p className="text-sm text-gray-400">Empréstimos</p>
             </div>
             <div className="text-center">
               <div className="text-xl font-bold text-purple-400">
-                {selectedPool.performance.averageRate}%
+                {(selectedPool.averageReturn || selectedPool.expectedReturn || 0).toFixed(1)}%
               </div>
               <p className="text-sm text-gray-400">Taxa Média</p>
             </div>
@@ -495,7 +579,7 @@ export const PoolManagementFlow: React.FC<PoolManagementFlowProps> = ({ onBack }
                       <div>
                         <h4 className="font-semibold text-white">Empréstimo #{loan.id.slice(-4)}</h4>
                         <p className="text-sm text-gray-400">
-                          {loan.borrowerType} - {loan.borrowerProfession} (Score: {loan.score})
+                          {'borrowerType' in loan ? `${loan.borrowerType} - ${loan.borrowerProfession}` : 'borrowerName' in loan ? loan.borrowerName : 'Tomador'} (Score: {loan.score})
                         </p>
                       </div>
                     </div>
@@ -504,7 +588,9 @@ export const PoolManagementFlow: React.FC<PoolManagementFlowProps> = ({ onBack }
                       <div className="text-lg font-semibold text-white">
                         {formatCurrency(loan.amount)}
                       </div>
-                      <p className="text-sm text-gray-400">{loan.term}x | {loan.rate}% a.a.</p>
+                      <p className="text-sm text-gray-400">
+                        {'termMonths' in loan ? loan.termMonths : 'term' in loan ? loan.term : 12}x | {'interestRate' in loan ? loan.interestRate : 'rate' in loan ? loan.rate : 0}% a.a.
+                      </p>
                     </div>
                   </div>
 
@@ -523,13 +609,13 @@ export const PoolManagementFlow: React.FC<PoolManagementFlowProps> = ({ onBack }
                   <div className="grid grid-cols-3 gap-4">
                     <div className="text-center">
                       <div className="text-sm font-medium text-white">
-                        {loan.paidInstallments}/{loan.totalInstallments}
+                        {'paidInstallments' in loan ? `${loan.paidInstallments}/${loan.totalInstallments}` : '-'}
                       </div>
                       <p className="text-xs text-gray-400">parcelas pagas</p>
                     </div>
                     <div className="text-center">
                       <div className="text-sm font-medium text-blue-400">
-                        {new Date(loan.nextPaymentDate).toLocaleDateString('pt-BR')}
+                        {loan.nextPaymentDate ? new Date(loan.nextPaymentDate).toLocaleDateString('pt-BR') : '-'}
                       </div>
                       <p className="text-xs text-gray-400">próximo pagamento</p>
                     </div>
@@ -540,16 +626,18 @@ export const PoolManagementFlow: React.FC<PoolManagementFlowProps> = ({ onBack }
                     </div>
                   </div>
 
-                  <div className="space-y-2 bg-[rgba(0,0,0,0)]">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-400">Progresso</span>
-                      <span className="text-white">{Math.round((loan.paidInstallments / loan.totalInstallments) * 100)}%</span>
+                  {'paidInstallments' in loan && 'totalInstallments' in loan && (
+                    <div className="space-y-2 bg-[rgba(0,0,0,0)]">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">Progresso</span>
+                        <span className="text-white">{Math.round((loan.paidInstallments / loan.totalInstallments) * 100)}%</span>
+                      </div>
+                      <Progress 
+                        value={(loan.paidInstallments / loan.totalInstallments) * 100} 
+                        className="h-3 bg-gray-700/50 [&>div]:bg-gradient-to-r [&>div]:from-green-400 [&>div]:to-blue-400" 
+                      />
                     </div>
-                    <Progress 
-                      value={(loan.paidInstallments / loan.totalInstallments) * 100} 
-                      className="h-3 bg-gray-700/50 [&>div]:bg-gradient-to-r [&>div]:from-green-400 [&>div]:to-blue-400" 
-                    />
-                  </div>
+                  )}
                 </div>
               </Card>
             ))}
@@ -606,63 +694,56 @@ export const PoolManagementFlow: React.FC<PoolManagementFlowProps> = ({ onBack }
             </div>
 
             <div>
-              <Label className="text-white">Score Mínimo Aceito</Label>
-              <div className="mt-4">
-                <Slider
-                  value={[editingPool.criteria.minScore]}
-                  onValueChange={(value) => setEditingPool(prev => prev ? {
-                    ...prev,
-                    criteria: { ...prev.criteria, minScore: value[0] }
-                  } : null)}
-                  min={400}
-                  max={1000}
-                  step={50}
-                  className="w-full"
-                />
-                <div className="flex justify-between mt-2">
-                  <span className="text-sm text-gray-400">400</span>
-                  <span className="text-white font-medium">{editingPool.criteria.minScore}</span>
-                  <span className="text-sm text-gray-400">1000</span>
-                </div>
-              </div>
+              <Label className="text-white">Capital Total (R$)</Label>
+              <Input
+                type="number"
+                step="1000"
+                min="0"
+                value={editingPool.totalCapital ?? ''}
+                onChange={(e) => {
+                  const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                  if (!isNaN(value) && value >= 0) {
+                    setEditingPool(prev => prev ? { ...prev, totalCapital: value } : null);
+                  }
+                }}
+                className="bg-gray-800 border-gray-600 text-white mt-2"
+                placeholder="Ex: 100000"
+              />
+              <p className="text-xs text-gray-400 mt-1">Capital total disponível para a pool (mínimo R$ 1.000)</p>
             </div>
 
             <div>
-              <Label className="text-white">Taxa Mínima de Retorno (% a.a.)</Label>
-              <div className="mt-4">
-                <Slider
-                  value={[editingPool.criteria.minReturn]}
-                  onValueChange={(value) => setEditingPool(prev => prev ? {
-                    ...prev,
-                    criteria: { ...prev.criteria, minReturn: value[0] }
-                  } : null)}
-                  min={12}
-                  max={40}
-                  step={0.5}
-                  className="w-full"
-                />
-                <div className="flex justify-between mt-2">
-                  <span className="text-sm text-gray-400">12%</span>
-                  <span className="text-white font-medium">{editingPool.criteria.minReturn}% a.a.</span>
-                  <span className="text-sm text-gray-400">40%</span>
-                </div>
-              </div>
+              <Label className="text-white">Retorno Esperado (% a.a.)</Label>
+              <Input
+                type="number"
+                step="0.1"
+                min="0"
+                max="100"
+                value={editingPool.expectedReturn ?? ''}
+                onChange={(e) => {
+                  const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                  if (!isNaN(value) && value >= 0 && value <= 100) {
+                    setEditingPool(prev => prev ? { ...prev, expectedReturn: value } : null);
+                  }
+                }}
+                className="bg-gray-800 border-gray-600 text-white mt-2"
+                placeholder="Ex: 18.5"
+              />
+              <p className="text-xs text-gray-400 mt-1">Taxa de retorno anual esperada (0-100%)</p>
             </div>
 
             <div>
-              <Label className="text-white">Prazo Máximo Aceito</Label>
+              <Label className="text-white">Duração (meses)</Label>
               <div className="grid grid-cols-4 gap-3 mt-4">
                 {[6, 12, 18, 24].map((months) => (
                   <Button
                     key={months}
-                    variant={editingPool.criteria.maxTerm === months ? "default" : "outline"}
-                    onClick={() => setEditingPool(prev => prev ? {
-                      ...prev,
-                      criteria: { ...prev.criteria, maxTerm: months }
-                    } : null)}
-                    className={editingPool.criteria.maxTerm === months 
+                    type="button"
+                    variant={editingPool.durationMonths === months ? "default" : "outline"}
+                    onClick={() => setEditingPool(prev => prev ? { ...prev, durationMonths: months } : null)}
+                    className={editingPool.durationMonths === months 
                       ? "bg-blue-600 hover:bg-blue-700 text-white border-blue-600" 
-                      : "border-gray-600 text-gray-900 bg-white hover:bg-gray-100 hover:text-gray-900"
+                      : "border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white"
                     }
                   >
                     {months} meses
@@ -671,13 +752,176 @@ export const PoolManagementFlow: React.FC<PoolManagementFlowProps> = ({ onBack }
               </div>
             </div>
 
-            <Card className="bg-yellow-500/10 border-yellow-500/30 p-4">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="w-5 h-5 text-yellow-400 mt-0.5" />
+            <div className="border-t border-gray-700 pt-6">
+              <h3 className="text-lg font-semibold text-white mb-4">Critérios de Elegibilidade</h3>
+              
+              <div className="space-y-4">
                 <div>
-                  <h4 className="font-medium text-yellow-400 mb-1">Importante</h4>
+                  <Label className="text-white">Score Mínimo</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="850"
+                    value={editingPool.criteria?.minScore ?? ''}
+                    onChange={(e) => {
+                      const value = e.target.value === '' ? 0 : parseInt(e.target.value);
+                      if (!isNaN(value) && value >= 0 && value <= 850) {
+                        setEditingPool(prev => {
+                          if (!prev) return null;
+                          return { 
+                            ...prev, 
+                            criteria: { 
+                              ...prev.criteria,
+                              minScore: value,
+                              requiresCollateral: prev.criteria?.requiresCollateral ?? false,
+                              collateralTypes: prev.criteria?.collateralTypes ?? [],
+                              minInterestRate: prev.criteria?.minInterestRate ?? 0,
+                              maxTermMonths: prev.criteria?.maxTermMonths ?? 24
+                            } 
+                          };
+                        });
+                      }
+                    }}
+                    className="bg-gray-800 border-gray-600 text-white mt-2"
+                    placeholder="Ex: 700"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Score de crédito mínimo exigido (0-850, 0 = sem mínimo)</p>
+                </div>
+
+                <div>
+                  <Label className="text-white">Prazo Máximo (meses)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="60"
+                    value={editingPool.criteria?.maxTermMonths ?? ''}
+                    onChange={(e) => {
+                      const value = e.target.value === '' ? 0 : parseInt(e.target.value);
+                      if (!isNaN(value) && value >= 0 && value <= 60) {
+                        setEditingPool(prev => {
+                          if (!prev) return null;
+                          return { 
+                            ...prev, 
+                            criteria: { 
+                              ...prev.criteria,
+                              minScore: prev.criteria?.minScore ?? 700,
+                              requiresCollateral: prev.criteria?.requiresCollateral ?? false,
+                              collateralTypes: prev.criteria?.collateralTypes ?? [],
+                              minInterestRate: prev.criteria?.minInterestRate ?? 0,
+                              maxTermMonths: value
+                            } 
+                          };
+                        });
+                      }
+                    }}
+                    className="bg-gray-800 border-gray-600 text-white mt-2"
+                    placeholder="Ex: 24"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Prazo máximo aceito (0-60 meses, 0 = sem limite)</p>
+                </div>
+
+                <div>
+                  <Label className="text-white">Taxa Mínima (% a.a.)</Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    value={editingPool.criteria?.minInterestRate ?? ''}
+                    onChange={(e) => {
+                      const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                      if (!isNaN(value) && value >= 0 && value <= 100) {
+                        setEditingPool(prev => {
+                          if (!prev) return null;
+                          return { 
+                            ...prev, 
+                            criteria: { 
+                              ...prev.criteria,
+                              minScore: prev.criteria?.minScore ?? 700,
+                              requiresCollateral: prev.criteria?.requiresCollateral ?? false,
+                              collateralTypes: prev.criteria?.collateralTypes ?? [],
+                              minInterestRate: value,
+                              maxTermMonths: prev.criteria?.maxTermMonths ?? 24
+                            } 
+                          };
+                        });
+                      }
+                    }}
+                    className="bg-gray-800 border-gray-600 text-white mt-2"
+                    placeholder="Ex: 15.0"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Taxa de juros mínima aceita (0% = sem mínimo)</p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="requireCollateral"
+                    checked={editingPool.criteria?.requiresCollateral || false}
+                    onChange={(e) => {
+                      setEditingPool(prev => {
+                        if (!prev) return null;
+                        return { 
+                          ...prev, 
+                          criteria: { 
+                            ...prev.criteria,
+                            minScore: prev.criteria?.minScore ?? 700,
+                            requiresCollateral: e.target.checked,
+                            collateralTypes: prev.criteria?.collateralTypes ?? [],
+                            minInterestRate: prev.criteria?.minInterestRate ?? 0,
+                            maxTermMonths: prev.criteria?.maxTermMonths ?? 24
+                          } 
+                        };
+                      });
+                    }}
+                    className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-blue-600 focus:ring-blue-500"
+                  />
+                  <Label htmlFor="requireCollateral" className="text-white cursor-pointer">
+                    Exigir garantia (colateral)
+                  </Label>
+                </div>
+              </div>
+            </div>
+
+            {/* Cálculo de Lucro Simulado */}
+            {editingPool.expectedReturn && editingPool.durationMonths && (
+              <Card className="bg-green-500/10 border-green-500/30 p-4">
+                <div className="flex items-start gap-2">
+                  <TrendingUp className="w-5 h-5 text-green-400 mt-0.5" />
+                  <div className="flex-1">
+                    <h4 className="font-medium text-green-400 mb-2">Projeção de Lucro</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <p className="text-xs text-gray-400">Retorno Total</p>
+                        <p className="text-lg font-semibold text-white">
+                          {((editingPool.expectedReturn / 100) * (editingPool.durationMonths / 12) * 100).toFixed(2)}%
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {editingPool.durationMonths} meses a {editingPool.expectedReturn}% a.a.
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400">Retorno por R$ 10.000</p>
+                        <p className="text-lg font-semibold text-green-500">
+                          R$ {Math.abs(10000 * (editingPool.expectedReturn / 100) * (editingPool.durationMonths / 12)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          Lucro estimado
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            <Card className="bg-blue-500/10 border-blue-500/30 p-4">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-5 h-5 text-blue-400 mt-0.5" />
+                <div>
+                  <h4 className="font-medium text-blue-400 mb-1">Informação</h4>
                   <p className="text-sm text-gray-300">
-                    As alterações afetarão apenas novos empréstimos. 
+                    As alterações afetarão apenas novos empréstimos alocados a esta pool.
                     Empréstimos já ativos manterão suas condições originais.
                   </p>
                 </div>
@@ -694,12 +938,47 @@ export const PoolManagementFlow: React.FC<PoolManagementFlowProps> = ({ onBack }
               </Button>
               <Button
                 onClick={handleSaveEdit}
-                className="flex-1 bg-green-600 hover:bg-green-700"
+                disabled={
+                  !editingPool?.expectedReturn || 
+                  editingPool.expectedReturn <= 0 || 
+                  !editingPool?.durationMonths || 
+                  editingPool.durationMonths <= 0 ||
+                  !editingPool?.totalCapital ||
+                  editingPool.totalCapital < 1000
+                }
+                className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <CheckCircle className="w-4 h-4 mr-2" />
                 Salvar Alterações
               </Button>
             </div>
+            
+            {/* Aviso de validação */}
+            {editingPool && (
+              (!editingPool.expectedReturn || editingPool.expectedReturn <= 0 || 
+               !editingPool.durationMonths || editingPool.durationMonths <= 0 ||
+               !editingPool.totalCapital || editingPool.totalCapital < 1000) && (
+                <Card className="bg-red-500/10 border-red-500/30 p-3">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
+                    <div className="text-sm text-red-300">
+                      <p className="font-medium mb-1">Campos obrigatórios:</p>
+                      <ul className="list-disc list-inside space-y-0.5 text-xs">
+                        {(!editingPool.expectedReturn || editingPool.expectedReturn <= 0) && (
+                          <li>Retorno esperado deve ser maior que 0%</li>
+                        )}
+                        {(!editingPool.durationMonths || editingPool.durationMonths <= 0) && (
+                          <li>Duração deve ser maior que 0 meses</li>
+                        )}
+                        {(!editingPool.totalCapital || editingPool.totalCapital < 1000) && (
+                          <li>Capital total mínimo de R$ 1.000</li>
+                        )}
+                      </ul>
+                    </div>
+                  </div>
+                </Card>
+              )
+            )}
           </div>
         </Card>
       </div>

@@ -35,7 +35,7 @@ type DashboardView = 'main' | 'deposit' | 'withdraw' | 'invest' | 'create-pool' 
 
 export const LenderDashboard: React.FC = () => {
   const { user, logout } = useAuth();
-  const { balance: walletBalance, availableBalance, investedBalance } = useWallet();
+  const { balance: walletBalance, availableBalance, investedBalance, getTotalBalanceInBRL } = useWallet();
   
   // TODO: Substituir por ID do contexto do usuário quando implementado
   const INVESTOR_ID = 'i1000000-0000-0000-0000-000000000001'; // Carlos Investidor - investor com dados de teste
@@ -189,7 +189,7 @@ export const LenderDashboard: React.FC = () => {
         <PoolCreationFlow
           onBack={() => setCurrentView('main')}
           onComplete={() => setCurrentView('main')}
-          availableBalance={availableBalance.brl}
+          availableBalance={getTotalBalanceInBRL()}
         />
         
         {/* Bottom Navigation */}
@@ -573,13 +573,13 @@ export const LenderDashboard: React.FC = () => {
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold text-blue-400">
-                  {portfolioLoading ? '...' : performance.active_loans}
+                  {portfolioLoading ? '...' : (performance?.active_loans || 0)}
                 </p>
                 <p className="text-gray-400 text-sm">Ativos Ativos</p>
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold text-purple-400">
-                  {portfolioLoading ? '...' : `${performance.average_rate.toFixed(1)}%`}
+                  {portfolioLoading ? '...' : `${(performance?.average_rate || 0).toFixed(1)}%`}
                 </p>
                 <p className="text-gray-400 text-sm">Taxa Média</p>
               </div>

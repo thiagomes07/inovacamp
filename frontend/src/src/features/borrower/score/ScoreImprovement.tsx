@@ -23,6 +23,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { useAuth } from '../../../shared/hooks/useAuth';
+import { useScore } from '../../../shared/hooks/useScore';
 import { toast } from 'sonner@2.0.3';
 import { ScoreMissionCard } from './ScoreMissionCard';
 import { DocumentUpload } from './DocumentUpload';
@@ -45,6 +46,7 @@ interface ScoreImprovementProps {
 
 export const ScoreImprovement: React.FC<ScoreImprovementProps> = ({ onBack }) => {
   const { user, updateUserScore } = useAuth();
+  const { score: currentScoreFromDB, scoreData, isLoading: scoreLoading, refresh: refreshScore } = useScore(user?.id || '');
   const [currentView, setCurrentView] = useState<'main' | 'upload' | 'levels'>('main');
   const [selectedMission, setSelectedMission] = useState<Mission | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
@@ -133,7 +135,8 @@ export const ScoreImprovement: React.FC<ScoreImprovementProps> = ({ onBack }) =>
     }
   ]);
 
-  const currentScore = user?.score || 650;
+  // Usar score do banco de dados com fallback para o do user context
+  const currentScore = currentScoreFromDB || user?.score || 0;
   const completedMissions = missions.filter(m => m.completed);
   const totalEarnedPoints = completedMissions.reduce((sum, mission) => sum + mission.points, 0);
   const totalPossiblePoints = missions.reduce((sum, mission) => sum + mission.points, 0);

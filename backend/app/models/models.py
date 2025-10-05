@@ -44,6 +44,9 @@ class User(Base):
 
     def to_dict(self):
         """Converte o objeto User em um dicionário."""
+        # Usar calculated_score como fonte principal, fallback para credit_score se necessário
+        final_score = self.calculated_score if self.calculated_score is not None else self.credit_score
+        
         return {
             "user_id": self.user_id,
             "email": self.email,
@@ -52,7 +55,8 @@ class User(Base):
             "cpf_cnpj": self.cpf_cnpj,
             "document_type": self.document_type.value,
             "date_of_birth": self.date_of_birth,
-            "credit_score": self.credit_score,
+            "credit_score": final_score,  # Retorna calculated_score com nome credit_score para compatibilidade
+            "calculated_score": final_score,  # Mantém ambos por enquanto
             "kyc_approved": self.kyc_approved,
             "document_links": self.document_links,
             "financial_docs": self.financial_docs,
@@ -164,6 +168,11 @@ class Pool(Base):
     duration_months = Column(Integer, nullable=False)
     status = Column(SQLEnum(PoolStatus), default=PoolStatus.FUNDING, index=True)
     funding_deadline = Column(DateTime)
+    # Critérios de elegibilidade
+    min_score = Column(Integer, default=700)
+    requires_collateral = Column(Boolean, default=False)
+    min_interest_rate = Column(DECIMAL(5, 2), default=0.00)
+    max_term_months = Column(Integer, default=24)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
