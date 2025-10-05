@@ -573,13 +573,13 @@ export const LenderDashboard: React.FC = () => {
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold text-blue-400">
-                  {portfolioLoading ? '...' : performance.active_loans}
+                  {portfolioLoading ? '...' : (performance?.active_loans || 0)}
                 </p>
                 <p className="text-gray-400 text-sm">Ativos Ativos</p>
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold text-purple-400">
-                  {portfolioLoading ? '...' : `${performance.average_rate.toFixed(1)}%`}
+                  {portfolioLoading ? '...' : `${(performance?.average_rate || 0).toFixed(1)}%`}
                 </p>
                 <p className="text-gray-400 text-sm">Taxa Média</p>
               </div>

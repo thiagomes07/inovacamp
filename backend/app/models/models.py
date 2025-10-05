@@ -168,6 +168,11 @@ class Pool(Base):
     duration_months = Column(Integer, nullable=False)
     status = Column(SQLEnum(PoolStatus), default=PoolStatus.FUNDING, index=True)
     funding_deadline = Column(DateTime)
+    # Critérios de elegibilidade
+    min_score = Column(Integer, default=700)
+    requires_collateral = Column(Boolean, default=False)
+    min_interest_rate = Column(DECIMAL(5, 2), default=0.00)
+    max_term_months = Column(Integer, default=24)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
