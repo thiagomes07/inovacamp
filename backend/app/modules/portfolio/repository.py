@@ -60,11 +60,17 @@ class PortfolioRepository:
                 Loan.status == LoanStatus.ACTIVE
             ).scalar() or 0
             
+            # Calcular valor REALMENTE alocado (soma do principal dos loans ativos)
+            allocated_amount = self.db.query(func.sum(Loan.principal)).filter(
+                Loan.pool_id == pool.pool_id,
+                Loan.status == LoanStatus.ACTIVE
+            ).scalar() or 0
+            
             pools_data.append({
                 "id": pool.pool_id,
                 "name": pool.name,
                 "totalCapital": float(pool.target_amount),
-                "allocated": float(pool.raised_amount),
+                "allocated": float(allocated_amount),  # Valor realmente alocado em empréstimos
                 "loans": loans_count,
                 "maxLoans": 10,  # TODO: Adicionar campo no banco
                 "averageReturn": float(pool.expected_return),
@@ -80,11 +86,17 @@ class PortfolioRepository:
                     Loan.status == LoanStatus.ACTIVE
                 ).scalar() or 0
                 
+                # Calcular valor REALMENTE alocado (soma do principal dos loans ativos)
+                allocated_amount = self.db.query(func.sum(Loan.principal)).filter(
+                    Loan.pool_id == pool.pool_id,
+                    Loan.status == LoanStatus.ACTIVE
+                ).scalar() or 0
+                
                 pools_data.append({
                     "id": pool.pool_id,
                     "name": pool.name,
                     "totalCapital": float(pool.target_amount),
-                    "allocated": float(pool.raised_amount),
+                    "allocated": float(allocated_amount),  # Valor realmente alocado em empréstimos
                     "loans": loans_count,
                     "maxLoans": 10,
                     "averageReturn": float(pool.expected_return),

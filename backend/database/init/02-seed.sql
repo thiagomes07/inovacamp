@@ -180,7 +180,7 @@ SELECT * FROM (
         'i1000000-0000-0000-0000-000000000001' AS owner_id,
         'INVESTOR' AS owner_type,
         'USDC' AS currency,
-        150000.00 AS balance,
+        500000.00 AS balance,
         0.00 AS blocked,
         '0xfedcba9876543210fedcba9876543210fedcba98' AS wallet_address
 ) AS tmp
