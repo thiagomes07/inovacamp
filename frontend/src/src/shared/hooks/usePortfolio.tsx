@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 
-const API_URL = 'http://localhost:8000/api/v1';
 
 export interface PoolData {
   id: string;
@@ -76,7 +75,7 @@ export const usePortfolio = (investorId: string): UsePortfolioReturn => {
     setError(null);
 
     try {
-      const response = await fetch(`${API_URL}/portfolio/overview?investor_id=${investorId}`);
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/portfolio/overview?investor_id=${investorId}`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch portfolio data');

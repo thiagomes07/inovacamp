@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { Button } from '../../../../components/ui/button';
 import { FacialVerification } from './FacialVerification';
 import { LoanConditions } from './LoanConditions';
@@ -10,6 +10,13 @@ import { LoanReview } from './LoanReview';
 import { LoanProcessing } from './LoanProcessing';
 import { useCredit } from '../../../shared/hooks/useCredit';
 import { toast } from 'sonner';
+
+export interface LocationData {
+  latitude: number;
+  longitude: number;
+  timestamp: string;
+  accuracy?: number;
+}
 
 export interface CreditRequestData {
   // Loan conditions
@@ -31,6 +38,9 @@ export interface CreditRequestData {
   
   // Approval type
   approvalType: 'automatic' | 'manual' | 'both';
+  
+  // Location data
+  location?: LocationData;
   
   // Processing status
   isProcessing: boolean;
@@ -81,8 +91,12 @@ export const CreditRequestFlow: React.FC<CreditRequestFlowProps> = ({
     }
   };
 
-  const handleFacialVerificationComplete = () => {
-    toast.success('Verificação facial concluída com sucesso!');
+  const handleFacialVerificationComplete = (locationData: LocationData) => {
+    setRequestData(prev => ({ 
+      ...prev, 
+      location: locationData 
+    }));
+    toast.success('Verificação de segurança concluída com sucesso!');
     handleNext();
   };
 
@@ -103,7 +117,7 @@ export const CreditRequestFlow: React.FC<CreditRequestFlowProps> = ({
       setRequestData(prev => ({ ...prev, isProcessing: true }));
       setCurrentStep('processing');
 
-      // Submit credit request
+      // Submit credit request with location data
       const result = await requestCredit({
         amount: requestData.amount,
         installments: requestData.installments,
@@ -116,7 +130,8 @@ export const CreditRequestFlow: React.FC<CreditRequestFlowProps> = ({
           value: requestData.collateral!.estimatedValue,
           documents: requestData.collateral!.documents
         } : undefined,
-        approvalType: requestData.approvalType
+        approvalType: requestData.approvalType,
+        location: requestData.location // Send location data to backend
       });
 
       // Check if was approved

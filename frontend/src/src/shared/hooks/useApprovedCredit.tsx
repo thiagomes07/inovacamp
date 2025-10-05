@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from "react";
 
 interface ApprovedCredit {
   user_id: string;
@@ -22,7 +22,7 @@ export const useApprovedCredit = (userId: string) => {
 
     try {
       const response = await fetch(
-        `http://localhost:8000/api/v1/credit/approved/${userId}`
+        `${import.meta.env.VITE_API_BASE_URL}/credit/approved/${userId}`
       );
 
       if (!response.ok) {
@@ -32,11 +32,15 @@ export const useApprovedCredit = (userId: string) => {
       const data: ApprovedCredit = await response.json();
       setApprovedCredit(data.total_approved);
 
-      console.log('[useApprovedCredit] Crédito aprovado carregado:', data.total_approved);
+      console.log(
+        "[useApprovedCredit] Crédito aprovado carregado:",
+        data.total_approved
+      );
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erro ao buscar crédito aprovado';
+      const errorMessage =
+        err instanceof Error ? err.message : "Erro ao buscar crédito aprovado";
       setError(errorMessage);
-      console.error('Erro ao buscar crédito aprovado:', err);
+      console.error("Erro ao buscar crédito aprovado:", err);
       setApprovedCredit(0);
     } finally {
       setIsLoading(false);
@@ -53,6 +57,6 @@ export const useApprovedCredit = (userId: string) => {
     approvedCredit,
     isLoading,
     error,
-    refresh: fetchApprovedCredit
+    refresh: fetchApprovedCredit,
   };
 };

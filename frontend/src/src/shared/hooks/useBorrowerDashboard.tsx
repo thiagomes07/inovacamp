@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from "react";
 
 interface Loan {
   id: string;
@@ -6,7 +6,7 @@ interface Loan {
   nextPayment: number;
   daysUntilPayment: number;
   source: string;
-  type: 'pool' | 'direct';
+  type: "pool" | "direct";
   status: string;
   interest_rate: number;
   term_months: number;
@@ -38,7 +38,8 @@ interface BorrowerDashboardData {
 }
 
 export const useBorrowerDashboard = (userId: string) => {
-  const [dashboardData, setDashboardData] = useState<BorrowerDashboardData | null>(null);
+  const [dashboardData, setDashboardData] =
+    useState<BorrowerDashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,7 +55,7 @@ export const useBorrowerDashboard = (userId: string) => {
 
     try {
       const response = await fetch(
-        `http://localhost:8000/api/v1/credit/dashboard/${userId}`
+        `${import.meta.env.VITE_API_BASE_URL}/credit/dashboard/${userId}`
       );
 
       if (!response.ok) {
@@ -66,9 +67,10 @@ export const useBorrowerDashboard = (userId: string) => {
 
       return data;
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erro ao buscar dashboard';
+      const errorMessage =
+        err instanceof Error ? err.message : "Erro ao buscar dashboard";
       setError(errorMessage);
-      console.error('Erro ao buscar dashboard do tomador:', err);
+      console.error("Erro ao buscar dashboard do tomador:", err);
       return null;
     } finally {
       setIsLoading(false);
@@ -99,7 +101,7 @@ export const useBorrowerDashboard = (userId: string) => {
       total_borrowed: 0,
       total_paid: 0,
       total_remaining: 0,
-      active_loans_count: 0
-    }
+      active_loans_count: 0,
+    },
   };
 };
