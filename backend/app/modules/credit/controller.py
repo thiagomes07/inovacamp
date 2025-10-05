@@ -57,3 +57,38 @@ def get_user_credit_requests(
     result = service.get_user_credit_requests(user_id)
     
     return result
+
+
+@router.get("/dashboard/{user_id}")
+def get_borrower_dashboard(
+    user_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna dados consolidados do dashboard do tomador de crédito.
+    
+    Inclui:
+    - Empréstimos ativos
+    - Histórico de transações
+    - Estatísticas gerais
+    """
+    service = CreditService(db)
+    result = service.get_borrower_dashboard(user_id)
+    
+    return result
+
+
+@router.get("/approved/{user_id}")
+def get_approved_credit(
+    user_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna o total de crédito aprovado para um usuário.
+    
+    Soma todos os credit_requests com status APPROVED.
+    """
+    service = CreditService(db)
+    result = service.get_approved_credit(user_id)
+    
+    return result

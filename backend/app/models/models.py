@@ -44,6 +44,9 @@ class User(Base):
 
     def to_dict(self):
         """Converte o objeto User em um dicionário."""
+        # Usar calculated_score como fonte principal, fallback para credit_score se necessário
+        final_score = self.calculated_score if self.calculated_score is not None else self.credit_score
+        
         return {
             "user_id": self.user_id,
             "email": self.email,
@@ -52,7 +55,8 @@ class User(Base):
             "cpf_cnpj": self.cpf_cnpj,
             "document_type": self.document_type.value,
             "date_of_birth": self.date_of_birth,
-            "credit_score": self.credit_score,
+            "credit_score": final_score,  # Retorna calculated_score com nome credit_score para compatibilidade
+            "calculated_score": final_score,  # Mantém ambos por enquanto
             "kyc_approved": self.kyc_approved,
             "document_links": self.document_links,
             "financial_docs": self.financial_docs,

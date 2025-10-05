@@ -21,7 +21,7 @@ SELECT * FROM (
     SELECT 
         'u1000000-0000-0000-0000-000000000001' AS user_id,
         'joao.silva@email.com' AS email,
-        '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYzS/0Ng0mG' AS password_hash, -- senha: Password123!
+        '$2b$12$VK61/t9/8c0RwT2y0R7YNugdfC5DX7UKHblVZYNIedCc/Sdc2LK76' AS password_hash, -- senha: Password123!
         'Joao Silva' AS full_name,
         '11987654321' AS phone,
         '12345678901' AS cpf_cnpj,
@@ -40,7 +40,7 @@ SELECT * FROM (
     SELECT 
         'u1000000-0000-0000-0000-000000000002' AS user_id,
         'maria.santos@email.com' AS email,
-        '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYzS/0Ng0mG' AS password_hash,
+        '$2b$12$VK61/t9/8c0RwT2y0R7YNugdfC5DX7UKHblVZYNIedCc/Sdc2LK76' AS password_hash,
         'Maria Santos' AS full_name,
         '11976543210' AS phone,
         '98765432109' AS cpf_cnpj,
@@ -59,7 +59,7 @@ SELECT * FROM (
     SELECT 
         'u1000000-0000-0000-0000-000000000003' AS user_id,
         'empresa.tech@email.com' AS email,
-        '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYzS/0Ng0mG' AS password_hash,
+        '$2b$12$VK61/t9/8c0RwT2y0R7YNugdfC5DX7UKHblVZYNIedCc/Sdc2LK76' AS password_hash,
         'Tech Solutions LTDA' AS full_name,
         '1133334444' AS phone,
         '12345678000190' AS cpf_cnpj,
@@ -79,7 +79,7 @@ SELECT * FROM (
     SELECT 
         'i1000000-0000-0000-0000-000000000001' AS investor_id,
         'carlos.investor@email.com' AS email,
-        '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYzS/0Ng0mG' AS password_hash,
+        '$2b$12$VK61/t9/8c0RwT2y0R7YNugdfC5DX7UKHblVZYNIedCc/Sdc2LK76' AS password_hash,
         'Carlos Investidor' AS full_name,
         '11955556666' AS phone,
         '11122233344' AS cpf_cnpj,
@@ -95,7 +95,7 @@ SELECT * FROM (
     SELECT 
         'i1000000-0000-0000-0000-000000000002' AS investor_id,
         'ana.capital@email.com' AS email,
-        '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYzS/0Ng0mG' AS password_hash,
+        '$2b$12$VK61/t9/8c0RwT2y0R7YNugdfC5DX7UKHblVZYNIedCc/Sdc2LK76' AS password_hash,
         'Ana Paula Capital' AS full_name,
         '21988887777' AS phone,
         '55566677788' AS cpf_cnpj,
@@ -287,7 +287,7 @@ SELECT * FROM (
     SELECT 
         'u1000000-0000-0000-0000-000000000004' AS user_id,
         'ana.costa@email.com' AS email,
-        '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYzS/0Ng0mG' AS password_hash,
+        '$2b$12$VK61/t9/8c0RwT2y0R7YNugdfC5DX7UKHblVZYNIedCc/Sdc2LK76' AS password_hash,
         'Ana Costa' AS full_name,
         '21987654321' AS phone,
         '11122233355' AS cpf_cnpj,
@@ -306,7 +306,7 @@ SELECT * FROM (
     SELECT 
         'u1000000-0000-0000-0000-000000000005' AS user_id,
         'pedro.souza@email.com' AS email,
-        '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYzS/0Ng0mG' AS password_hash,
+        '$2b$12$VK61/t9/8c0RwT2y0R7YNugdfC5DX7UKHblVZYNIedCc/Sdc2LK76' AS password_hash,
         'Pedro Souza' AS full_name,
         '11966778899' AS phone,
         '22233344466' AS cpf_cnpj,
@@ -325,7 +325,7 @@ SELECT * FROM (
     SELECT 
         'u1000000-0000-0000-0000-000000000006' AS user_id,
         'restaurante.bom@email.com' AS email,
-        '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYzS/0Ng0mG' AS password_hash,
+        '$2b$12$VK61/t9/8c0RwT2y0R7YNugdfC5DX7UKHblVZYNIedCc/Sdc2LK76' AS password_hash,
         'Restaurante Bom Sabor LTDA' AS full_name,
         '1133445566' AS phone,
         '33344455000188' AS cpf_cnpj,

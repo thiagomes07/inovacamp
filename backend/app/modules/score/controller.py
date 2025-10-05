@@ -17,9 +17,12 @@ def get_user_score(
     Obtém o score atual do usuário.
     
     Retorna:
-    - credit_score: Score de crédito base
-    - calculated_score: Score calculado com base em documentos
+    - score: Score de crédito (calculado pela LLM baseado em documentos)
+    - calculated_score: Mesmo valor de score (mantido para compatibilidade)
     - documents_uploaded: Quantidade de documentos enviados
+    
+    Nota: O sistema usa APENAS calculated_score, que é atualizado pela LLM
+    ao validar documentos. O campo credit_score foi descontinuado.
     """
     service = ScoreService(db)
     result = service.get_user_score(user_id)

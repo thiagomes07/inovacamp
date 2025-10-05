@@ -263,11 +263,14 @@ class ScoreService:
         if not user:
             return {"error": "User not found"}
         
+        # Usar calculated_score como score principal
+        score = user.calculated_score if user.calculated_score is not None else 0
+        
         return {
             "user_id": user.user_id,
             "full_name": user.full_name,
-            "credit_score": user.credit_score,
-            "calculated_score": user.calculated_score,
+            "score": score,
+            "calculated_score": score,
             "documents_uploaded": len(user.document_links or []),
             "financial_docs_uploaded": len(user.financial_docs or [])
         }
@@ -486,7 +489,8 @@ class ScoreService:
         if not user:
             return {"error": "User not found"}
         
-        old_score = user.calculated_score or user.credit_score or 0
+        # Usar apenas calculated_score
+        old_score = user.calculated_score if user.calculated_score is not None else 0
         
         # Calcular pontos brutos dos novos documentos
         new_raw_points = 0

@@ -136,7 +136,7 @@ class PortfolioRepository:
         opportunities = self.db.query(
             CreditRequest,
             User.full_name.label("borrower_name"),
-            User.credit_score
+            User.calculated_score
         ).join(
             User, CreditRequest.user_id == User.user_id
         ).filter(
@@ -145,11 +145,14 @@ class PortfolioRepository:
         ).limit(limit).all()
         
         result = []
-        for req, borrower_name, credit_score in opportunities:
-            # Determinar risk level baseado no credit score
-            if credit_score >= 700:
+        for req, borrower_name, calculated_score in opportunities:
+            # Usar calculated_score, com fallback para 0 se None
+            score = calculated_score if calculated_score is not None else 0
+            
+            # Determinar risk level baseado no calculated_score
+            if score >= 700:
                 risk_level = "low"
-            elif credit_score >= 600:
+            elif score >= 600:
                 risk_level = "medium"
             else:
                 risk_level = "high"
@@ -161,7 +164,7 @@ class PortfolioRepository:
                 "purpose": req.collateral_description or "Capital de giro",
                 "rate": float(req.interest_rate) if req.interest_rate else 18.0,
                 "term": req.duration_months,
-                "score": credit_score,
+                "score": score,
                 "riskLevel": risk_level
             })
         
