@@ -109,6 +109,11 @@ CREATE TABLE IF NOT EXISTS pools (
     duration_months INT NOT NULL,
     status ENUM('FUNDING', 'ACTIVE', 'CLOSED') DEFAULT 'FUNDING',
     funding_deadline TIMESTAMP,
+    -- Critérios de elegibilidade
+    min_score INT DEFAULT 700 COMMENT 'Score de crédito mínimo exigido (300-850)',
+    requires_collateral BOOLEAN DEFAULT FALSE COMMENT 'Se exige garantia (colateral)',
+    min_interest_rate DECIMAL(5,2) DEFAULT 0.00 COMMENT 'Taxa de juros mínima aceita (%)',
+    max_term_months INT DEFAULT 24 COMMENT 'Prazo máximo aceito em meses',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (investor_id) REFERENCES investors(investor_id) ON DELETE CASCADE,

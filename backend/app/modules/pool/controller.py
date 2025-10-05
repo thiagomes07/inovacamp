@@ -38,17 +38,84 @@ def list_pools(
     return result
 
 
+@router.get("/investor/{investor_id}")
+def get_investor_pools(
+    investor_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Lista todas as pools de um investidor específico com estatísticas.
+    """
+    service = PoolService(db)
+    result = service.get_investor_pools(investor_id)
+    return result
+
+
 @router.get("/{pool_id}")
-def get_pool(
+def get_pool_details(
     pool_id: str,
     db: Session = Depends(get_db)
 ):
     """
-    Busca detalhes de um pool específico.
-    
-    **Ainda não implementado - Placeholder**
+    Busca detalhes completos de uma pool incluindo empréstimos alocados.
     """
-    return {"message": "Get pool not implemented"}
+    service = PoolService(db)
+    result = service.get_pool_details(pool_id)
+    return result
+
+
+@router.put("/{pool_id}")
+def update_pool(
+    pool_id: str,
+    updates: Dict[str, Any] = Body(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Atualiza critérios de uma pool (nome, retorno esperado, prazo).
+    """
+    service = PoolService(db)
+    result = service.update_pool_criteria(pool_id, updates)
+    return result
+
+
+@router.put("/{pool_id}/status")
+def update_pool_status(
+    pool_id: str,
+    data: Dict[str, str] = Body(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Atualiza status da pool (active, funding, closed).
+    
+    Body: {"status": "active" | "funding" | "closed"}
+    """
+    new_status = data.get('status')
+    if not new_status:
+        return {"error": "Status is required"}, 400
+    
+    service = PoolService(db)
+    result = service.update_pool_status(pool_id, new_status)
+    return result
+
+
+@router.post("/{pool_id}/increase-capital")
+def increase_pool_capital(
+    pool_id: str,
+    data: Dict[str, float] = Body(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Aumenta o capital total da pool.
+    
+    Body: {"amount": 10000.00}
+    """
+    amount = data.get('amount')
+    if not amount:
+        return {"error": "Amount is required"}, 400
+    
+    service = PoolService(db)
+    result = service.increase_pool_capital(pool_id, amount)
+    return {"message": "Capital increased successfully", "pool": result}
 
 
 @router.post("/{pool_id}/fund")
