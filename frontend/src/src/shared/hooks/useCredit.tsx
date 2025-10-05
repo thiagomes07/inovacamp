@@ -1,6 +1,13 @@
 import { useState, useCallback } from 'react';
 import { useAuth } from './useAuth';
 
+export interface LocationData {
+  latitude: number;
+  longitude: number;
+  timestamp: string;
+  accuracy?: number;
+}
+
 export interface CreditRequest {
   id: string;
   amount: number;
@@ -16,6 +23,7 @@ export interface CreditRequest {
     documents: File[];
   };
   approvalType: 'automatic' | 'manual' | 'both';
+  location?: LocationData;
   status: 'pending' | 'approved' | 'rejected' | 'analyzing';
   createdAt: string;
   approvedBy?: {
@@ -106,6 +114,10 @@ export const useCredit = (): UseCreditReturn => {
         throw new Error('Usuário não autenticado');
       }
 
+      if (!request.location) {
+        throw new Error('Dados de localização são obrigatórios');
+      }
+
       // Mapear collateral para formato do backend
       const collateralDocs = request.collateral?.documents.map(file => file.name) || [];
       
@@ -117,8 +129,17 @@ export const useCredit = (): UseCreditReturn => {
         approval_type: request.approvalType,
         collateral_type: request.collateral?.type.toUpperCase() || 'NONE',
         collateral_description: request.collateral?.description,
-        collateral_docs: collateralDocs
+        collateral_docs: collateralDocs,
+        // Location data
+        location: {
+          latitude: request.location.latitude,
+          longitude: request.location.longitude,
+          timestamp: request.location.timestamp,
+          accuracy: request.location.accuracy
+        }
       };
+
+      console.log('Sending credit request with location:', payload);
 
       const response = await fetch('http://localhost:8000/api/v1/credit/request', {
         method: 'POST',
@@ -146,6 +167,7 @@ export const useCredit = (): UseCreditReturn => {
         purpose: request.purpose,
         collateral: request.collateral,
         approvalType: request.approvalType,
+        location: request.location,
         status: creditRequestData.status === 'APPROVED' ? 'approved' : 
                 creditRequestData.status === 'REJECTED' ? 'rejected' : 'analyzing',
         createdAt: creditRequestData.requested_at
