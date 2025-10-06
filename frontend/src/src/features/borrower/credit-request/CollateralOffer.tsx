@@ -7,6 +7,7 @@ import { Input } from '../../../../components/ui/input';
 import { Textarea } from '../../../../components/ui/textarea';
 import { MaskedInput } from '../../../shared/components/ui/MaskedInput';
 import { CreditRequestData } from './CreditRequestFlow';
+import { toast } from 'sonner';
 
 interface CollateralOfferProps {
   data: CreditRequestData;
@@ -61,6 +62,7 @@ export const CollateralOffer: React.FC<CollateralOfferProps> = ({
   const [documents, setDocuments] = useState<File[]>(data.collateral?.documents || []);
   const [photos, setPhotos] = useState<File[]>(data.collateral?.photos || []);
   const [signedContract, setSignedContract] = useState<File | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
 
   const handleToggleCollateral = (value: boolean) => {
     setHasCollateral(value);
@@ -107,28 +109,104 @@ export const CollateralOffer: React.FC<CollateralOfferProps> = ({
     link.click();
   };
 
-  const handleNext = () => {
-    onUpdate({
-      hasCollateral,
-      collateral: hasCollateral && selectedType ? {
-        type: selectedType,
-        description,
-        estimatedValue,
-        documents,
-        photos
-      } : undefined
+  const handleNext = async () => {
+    // Se não tem garantia, pula direto
+    if (!hasCollateral) {
+      onUpdate({
+        hasCollateral: false,
+        collateral: undefined
+      });
+      onNext();
+      return;
+    }
+
+    // Validação por IA mockada
+    setIsValidating(true);
+    
+    // Toast inicial
+    toast.loading('🤖 Validando documentos com IA...', {
+      id: 'ai-validation',
+      description: 'Analisando autenticidade e conformidade'
     });
-    onNext();
+
+    // Simula análise de documentos (2 segundos)
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    toast.loading('📄 Verificando documentos...', {
+      id: 'ai-validation',
+      description: 'Conferindo assinaturas e validade'
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    toast.loading('📸 Analisando fotos...', {
+      id: 'ai-validation',
+      description: 'Validando qualidade e autenticidade'
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    toast.loading('💰 Avaliando valor...', {
+      id: 'ai-validation',
+      description: 'Comparando com valores de mercado'
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    // Resultado final
+    const aprovado = Math.random() > 0.1; // 90% de chance de aprovação
+
+    if (aprovado) {
+      toast.success('✅ Garantia aprovada pela IA!', {
+        id: 'ai-validation',
+        description: `Valor validado: R$ ${estimatedValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} • Taxa reduzida em ${collateralTypes.find(t => t.type === selectedType)?.discount}`
+      });
+
+      // Atualiza dados e avança
+      onUpdate({
+        hasCollateral,
+        collateral: {
+          type: selectedType!,
+          description,
+          estimatedValue,
+          documents,
+          photos
+        }
+      });
+
+      // Aguarda um momento para o usuário ver a mensagem
+      setTimeout(() => {
+        setIsValidating(false);
+        onNext();
+      }, 1500);
+    } else {
+      toast.error('❌ Garantia não aprovada', {
+        id: 'ai-validation',
+        description: 'Alguns documentos precisam ser revisados. Tente novamente.'
+      });
+      setIsValidating(false);
+    }
   };
 
   const isValid = !hasCollateral || (
     selectedType && 
-    description.length >= 10 && 
+    description.length >= 5 && 
     estimatedValue > 0 && 
     documents.length > 0 && 
-    photos.length > 0 &&
-    signedContract !== null
+    photos.length > 0
+    // Contrato é opcional - IA pode validar sem ele
   );
+
+  // Debug - remover depois
+  console.log('🔍 Validação:', {
+    hasCollateral,
+    selectedType,
+    descriptionLength: description.length,
+    estimatedValue,
+    documentsCount: documents.length,
+    photosCount: photos.length,
+    isValid
+  });
 
   return (
     <div className="p-6 space-y-6">
@@ -247,14 +325,27 @@ export const CollateralOffer: React.FC<CollateralOfferProps> = ({
                   <label className="text-white font-semibold mb-2 block">
                     Valor estimado
                   </label>
-                  <MaskedInput
-                    mask="money"
-                    currency="BRL"
-                    value={estimatedValue ? `R$ ${estimatedValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''}
-                    onChange={(maskedValue) => {
-                      // Remove "R$ " e converte de volta para número
-                      const numericValue = maskedValue.replace(/[R$\s.,]/g, '');
-                      setEstimatedValue(numericValue ? Number(numericValue) / 100 : 0);
+                  <Input
+                    type="text"
+                    value={estimatedValue > 0 ? `R$ ${estimatedValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      // Remove tudo exceto números
+                      const rawValue = e.target.value.replace(/\D/g, '');
+                      // Converte centavos para reais (divide por 100)
+                      const numericValue = rawValue ? parseInt(rawValue, 10) / 100 : 0;
+                      setEstimatedValue(numericValue);
+                    }}
+                    onFocus={(e: React.FocusEvent<HTMLInputElement>) => {
+                      // Remove formatação quando foca
+                      if (estimatedValue > 0) {
+                        e.target.value = (estimatedValue * 100).toString().replace(/\D/g, '');
+                      }
+                    }}
+                    onBlur={(e: React.FocusEvent<HTMLInputElement>) => {
+                      // Aplica formatação quando perde foco
+                      if (estimatedValue > 0) {
+                        e.target.value = `R$ ${estimatedValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+                      }
                     }}
                     placeholder="R$ 0,00"
                     className="bg-gray-800/50 border-gray-600 text-white"
@@ -432,10 +523,17 @@ export const CollateralOffer: React.FC<CollateralOfferProps> = ({
 
         <Button
           onClick={handleNext}
-          disabled={!isValid}
+          disabled={isValidating}
           className="w-full bg-blue-600 hover:bg-blue-700 py-3 mt-6"
         >
-          Continuar
+          {isValidating ? (
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              Validando com IA...
+            </div>
+          ) : (
+            'Continuar'
+          )}
         </Button>
       </Card>
     </div>

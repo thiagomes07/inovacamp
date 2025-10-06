@@ -146,7 +146,7 @@ export const useCredit = (): UseCreditReturn => {
         console.log("Sending credit request with location:", payload);
 
         const response = await fetch(
-          '${import.meta.env.VITE_API_BASE_URL}/credit/request',
+          `${import.meta.env.VITE_API_BASE_URL}/credit/request`,
           {
             method: "POST",
             headers: {
